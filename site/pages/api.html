@@ -54,7 +54,7 @@ const keys = await eimzo.listKeys({ signal: controller.signal });
 await eimzo.sign(data, { signal: AbortSignal.timeout(60_000) });</code></pre>
     <p>A call that is still queued, or still waiting for <code>init()</code>, never reaches E-IMZO. A password window
       that E-IMZO has already opened stays open; the next queued operation waits for it, so a second window never
-      appears. A key loaded after <code>loadKey()</code> was aborted is unloaded again.</p>
+      appears. A key loaded by an aborted <code>loadKey()</code> or <code>login()</code> is unloaded again.</p>
 
     <h2 id="backend"><code>createFetchBackend(options)</code></h2>
     <div class="table-wrap">

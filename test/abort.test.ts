@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createEimzo, createWebSocketTransport, type PfxKey } from '../src';
+import { createEimzo, createWebSocketTransport, type Eimzo, type PfxKey, type Transport } from '../src';
 import { fakeTransport, PFX_ALIAS, VERSION_486 } from './helpers';
 
 const key = { type: 'pfx', disk: 'C:', path: 'DSKEYS', name: 'key1', alias: PFX_ALIAS } as PfxKey;
@@ -171,7 +171,8 @@ describe('Eimzo: signal', () => {
     await expect(eimzo.loadKey(key, { verifyPassword, signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
     await vi.waitFor(() => expect(calls.find((c) => c.name === 'unload_key')?.arguments).toEqual(['K1']));
     expect(calls.some((c) => c.name === 'verify_password')).toBe(false);
-    expect(eimzo.keyId).toBeNull();
+    // Состояние очищается после ответа на unload_key — ждём результата, а не вызова.
+    await vi.waitFor(() => expect(eimzo.keyId).toBeNull());
   });
 
   it('уже отменённый signal — E-IMZO не вызывается', async () => {
@@ -268,6 +269,48 @@ describe('отмена: порядок событий', () => {
     expect(eimzo.keyId).toBe('K1');
   });
 
+  it.each(['pkcs7.create_pkcs7', 'backend.login'])(
+    'login, отменённый на шаге %s, выгружает загруженный им ключ',
+    async (step) => {
+      const controller = new AbortController();
+      const { transport, calls } = fakeTransport({
+        version: VERSION_486,
+        'pfx.load_key': { success: true, keyId: 'K1' },
+        'pfx.unload_key': { success: true },
+        'pkcs7.create_pkcs7': () => {
+          if (step === 'pkcs7.create_pkcs7') controller.abort();
+          return { success: true, pkcs7_64: 'P' };
+        },
+      });
+      const backend = {
+        getChallenge: async () => 'challenge',
+        login: vi.fn(() => {
+          controller.abort();
+          return new Promise<never>(() => {}); // backend не поддерживает signal
+        }),
+      };
+      const eimzo = createEimzo({ transport, backend });
+      await expect(eimzo.login(key, { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
+      // Подпись с явным keyId встаёт в очередь за login и сама ничего не выгружает.
+      await eimzo.sign('y', { keyId: 'KX' });
+      expect(calls.filter((c) => c.name === 'unload_key').map((c) => c.arguments)).toEqual([['K1']]);
+      expect(eimzo.keyId).toBeNull();
+    },
+  );
+
+  it('ошибка входа без отмены (например, 403 от backend) ключ не выгружает', async () => {
+    const { transport, calls } = fakeTransport({
+      version: VERSION_486,
+      'pfx.load_key': { success: true, keyId: 'K1' },
+      'pkcs7.create_pkcs7': { success: true, pkcs7_64: 'P' },
+    });
+    const backend = { getChallenge: async () => 'challenge', login: async () => Promise.reject(new Error('403')) };
+    const eimzo = createEimzo({ transport, backend });
+    await expect(eimzo.login(key)).rejects.toThrow('403');
+    expect(eimzo.keyId).toBe('K1');
+    expect(calls.some((c) => c.name === 'unload_key')).toBe(false);
+  });
+
   it('getChallenge без поддержки signal не держит очередь после отмены login', async () => {
     const { transport } = fakeTransport({ version: VERSION_486, 'pkcs7.create_pkcs7': { success: true, pkcs7_64: 'P' } });
     const backend = { getChallenge: vi.fn(() => new Promise<string>(() => {})), login: vi.fn() };
@@ -309,5 +352,77 @@ describe('отмена: порядок событий', () => {
     expect(calls.filter((c) => c.name === 'load_key')).toHaveLength(1);
     expect(calls.some((c) => c.name === 'unload_key')).toBe(false);
     expect(backend.login).not.toHaveBeenCalled();
+  });
+});
+
+describe('отмена на каждом шаге каждой операции из очереди', () => {
+  type Run = (eimzo: Eimzo<unknown>, signal: AbortSignal) => Promise<unknown>;
+  const operations: [string, Run][] = [
+    ['loadKey + verifyPassword', (e, signal) => e.loadKey(key, { verifyPassword: true, signal })],
+    ['sign', (e, signal) => e.sign('x', { signal })],
+    ['signFile', (e, signal) => e.signFile(new Blob(['x']), { signal })],
+    ['login', (e, signal) => e.login(key, { signal })],
+    ['signDocument', (e, signal) => e.signDocument('x', { signal })],
+  ];
+
+  /**
+   * Каждый вызов E-IMZO и backend — шаг. На шаге `abortAt` операция отменяется:
+   * E-IMZO всё равно отвечает (пользователь закрыл окно), backend игнорирует signal и не отвечает никогда.
+   */
+  async function setup(abortAt: number) {
+    const controller = new AbortController();
+    const steps: string[] = [];
+    const afterAbort: string[] = [];
+    let counting = false;
+    let loads = 0;
+    const record = (name: string) => {
+      if (!counting) return false;
+      if (controller.signal.aborted) afterAbort.push(name);
+      steps.push(name);
+      if (steps.length - 1 === abortAt) controller.abort();
+      return controller.signal.aborted;
+    };
+    const transport: Transport = async (req) => {
+      const id = req.name === 'unload_key' ? `:${String(req.arguments![0])}` : '';
+      record(`${req.plugin ?? ''}.${req.name}${id}`);
+      if (req.name === 'version') return VERSION_486;
+      if (req.name === 'load_key') return { success: true, keyId: `K${loads++}` };
+      if (req.name === 'create_pkcs7') return { success: true, pkcs7_64: 'P' };
+      return { success: true };
+    };
+    const never = new Promise<never>(() => {});
+    const backend = {
+      getChallenge: () => (record('backend.getChallenge') ? never : Promise.resolve('challenge')),
+      login: () => (record('backend.login') ? never : Promise.resolve({ ok: true })),
+      timestamp: () => (record('backend.timestamp') ? never : Promise.resolve('TS')),
+    };
+    const eimzo = createEimzo({ transport, backend });
+    await eimzo.loadKey(key);
+    counting = true;
+    const stop = () => (counting = false);
+    return { eimzo, controller, steps, afterAbort, stop };
+  }
+
+  it.each(operations)('%s', async (_name, run) => {
+    const dry = await setup(-1);
+    await run(dry.eimzo, dry.controller.signal);
+    expect(dry.steps.length).toBeGreaterThan(0);
+
+    for (let abortAt = 0; abortAt < dry.steps.length; abortAt++) {
+      const { eimzo, controller, afterAbort, stop } = await setup(abortAt);
+      const context = `отмена на шаге ${abortAt} (${dry.steps[abortAt]})`;
+      await expect(run(eimzo, controller.signal), context).rejects.toMatchObject({ name: 'AbortError' });
+      // Контрольная подпись встаёт в очередь за отменённой операцией: она выполнится,
+      // только когда отменённая доработает, и не даст ей ничего отправить незамеченным.
+      const control = eimzo.sign('y', { keyId: 'KX' });
+      await expect(control, context).resolves.toBe('P');
+      stop();
+      // Очередь не заблокирована, даже если backend так и не ответил,
+      // и после отмены от имени отменённой операции ничего не отправлено.
+      // Последний запрос — контрольная подпись. До неё допустима только очистка:
+      // выгрузка ключа K1, который успела загрузить сама отменённая операция.
+      expect(afterAbort.at(-1), context).toBe('pkcs7.create_pkcs7');
+      expect(afterAbort.slice(0, -1).filter((s) => s !== 'pfx.unload_key:K1'), context).toEqual([]);
+    }
   });
 });

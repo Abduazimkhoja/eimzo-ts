@@ -4,7 +4,13 @@ import type { EimzoBackend } from './backend';
 import { parseCertificateInfo, type EimzoKey, type PfxKey, type TokenKey } from './certificate';
 import { EimzoError, errorFromResponse, isEimzoError } from './errors';
 import { DEFAULT_LOCALE, formatEimzoError, type EimzoLocale, type MessageOverrides } from './i18n';
-import { createDefaultTransport, type EimzoResponse, type Transport, type WebSocketTransportOptions } from './transport';
+import {
+  createDefaultTransport,
+  type EimzoRequest,
+  type EimzoResponse,
+  type Transport,
+  type WebSocketTransportOptions,
+} from './transport';
 
 /** Пары «домен → API-KEY» или плоский массив `[домен, ключ, домен, ключ, ...]`, как в демо. */
 export type ApiKeys = Record<string, string> | string[];
@@ -230,7 +236,7 @@ export class Eimzo<TLogin = unknown> {
     }
     const apiKeys = flattenApiKeys(this.options.apiKeys);
     if (apiKeys.length > 0) {
-      const res = await this.transport({ name: 'apikey', arguments: apiKeys });
+      const res = await this.send({ name: 'apikey', arguments: apiKeys });
       if (!res.success) throw new EimzoError('API_KEY_REJECTED', {}, { reason: res.reason });
     }
     return version;
@@ -242,7 +248,7 @@ export class Eimzo<TLogin = unknown> {
   }
 
   private async readVersion(signal?: AbortSignal): Promise<EimzoVersion> {
-    const res: EimzoResponse & VersionResponse = await this.transport({ name: 'version' }, { signal });
+    const res: EimzoResponse & VersionResponse = await this.send({ name: 'version' }, signal);
     if (!res.success) throw errorFromResponse(res);
     const major = parseInt(res.major ?? '', 10);
     const minor = parseInt(res.minor ?? '', 10);
@@ -269,9 +275,21 @@ export class Eimzo<TLogin = unknown> {
     await this.whenReady(signal);
     // Отмена во время init: запрос ещё не отправлен — не отправляем.
     throwIfAborted(signal);
-    const res = await this.transport({ plugin, name, arguments: args }, { signal: interruptible ? signal : undefined });
+    const res = await this.send({ plugin, name, arguments: args }, interruptible ? signal : undefined);
     if (!res.success) throw errorFromResponse(res);
     return res as EimzoResponse & R;
+  }
+
+  /**
+   * Единственная точка вызова транспорта. Транспорт может быть чужим (EIMZOEXT, свой
+   * `transport`), поэтому форму ответа проверяем здесь, а не в каждой реализации.
+   */
+  private async send(request: EimzoRequest, signal?: AbortSignal): Promise<EimzoResponse> {
+    const res: unknown = await this.transport(request, { signal });
+    if (!isRecord(res) || Array.isArray(res) || typeof res.success !== 'boolean') {
+      throw new EimzoError('EIMZO_ERROR', { reason: 'invalid response' });
+    }
+    return res as EimzoResponse;
   }
 
   /** PFX-ключи (и токены `ftjc` для E-IMZO старше 4.12). Ключи без ИНН и ПИНФЛ пропускаются. */
@@ -487,12 +505,18 @@ export class Eimzo<TLogin = unknown> {
     const { signal } = options;
     return this.exclusive(async () => {
       const backend = this.requireBackend('getChallenge', 'login');
-      // backend может не поддерживать signal: не держим очередь до его ответа.
+      // backend может не поддерживать signal: не держим очередь до его ответа (так же для login, timestamp).
       const challenge = await abortable(backend.getChallenge!({ signal }), signal);
       await this.doLoadKey(key, { signal });
-      const pkcs7 = await this.doSign(challenge, { signal });
-      throwIfAborted(signal);
-      return backend.login!(pkcs7, { signal });
+      try {
+        const pkcs7 = await this.doSign(challenge, { signal });
+        throwIfAborted(signal);
+        return await abortable(backend.login!(pkcs7, { signal }), signal);
+      } catch (error) {
+        // Вход отменён: ключ, загруженный этим login(), вместе с запомненным паролем в E-IMZO не оставляем.
+        if (signal?.aborted) await this.releaseCurrentKey();
+        throw error;
+      }
     }, signal);
   }
 
@@ -502,7 +526,7 @@ export class Eimzo<TLogin = unknown> {
       const backend = this.requireBackend('timestamp');
       const pkcs7 = await this.doSign(data, options);
       throwIfAborted(options.signal);
-      return backend.timestamp!(pkcs7, { signal: options.signal });
+      return abortable(backend.timestamp!(pkcs7, { signal: options.signal }), options.signal);
     }, options.signal);
   }
 

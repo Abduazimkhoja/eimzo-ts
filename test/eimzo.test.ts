@@ -48,6 +48,21 @@ describe('init', () => {
   });
 });
 
+describe('проверка ответа транспорта', () => {
+  const malformed = [null, undefined, [], {}, { success: 'yes' }, 'ok'];
+
+  it.each(malformed)('ответ %j на вызов плагина — EIMZO_ERROR', async (reply) => {
+    const transport = async (req: { name: string }) => (req.name === 'version' ? VERSION_486 : reply) as never;
+    await expect(createEimzo({ transport }).call('pfx', 'list_all_certificates')).rejects.toMatchObject({ code: 'EIMZO_ERROR' });
+  });
+
+  it.each(malformed)('ответ %j на version и apikey — EIMZO_ERROR', async (reply) => {
+    await expect(createEimzo({ transport: async () => reply as never }).getVersion()).rejects.toMatchObject({ code: 'EIMZO_ERROR' });
+    const transport = async (req: { name: string }) => (req.name === 'version' ? VERSION_486 : reply) as never;
+    await expect(createEimzo({ transport, apiKeys: DEV_API_KEYS }).init()).rejects.toMatchObject({ code: 'EIMZO_ERROR' });
+  });
+});
+
 describe('listKeys', () => {
   it('E-IMZO >= 4.12: только PFX, ключи без ИНН/ПИНФЛ отброшены', async () => {
     const { transport, calls } = fakeTransport({ version: VERSION_486, 'pfx.list_all_certificates': pfxList });
