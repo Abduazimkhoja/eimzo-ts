@@ -110,6 +110,21 @@ describe('loadKey / sign', () => {
     await expect(eimzo.sign('x', { keyId: 'K' })).rejects.toMatchObject({ code: 'WRONG_PASSWORD' });
   });
 
+  it('неверный пароль в E-IMZO 6.3 (status -9999) — WRONG_PASSWORD', async () => {
+    const reasons = [
+      'Sequence tag error (at uz.eimzo.app.plugin.pkcs7.Pkcs7Plugin$2.handle:210)',
+      'failed to decrypt safe contents entry: java.io.IOException: getSecretKey failed: Password is not ASCII',
+    ];
+    for (const reason of reasons) {
+      const { transport } = fakeTransport({
+        version: VERSION_486,
+        'pkcs7.create_pkcs7': { success: false, status: -9999, reason },
+      });
+      const eimzo = createEimzo({ transport });
+      await expect(eimzo.sign('x', { keyId: 'K' })).rejects.toMatchObject({ code: 'WRONG_PASSWORD', status: -9999 });
+    }
+  });
+
   it('«Отмена» в окне пароля — CANCELLED (реальный ответ E-IMZO 6.3)', async () => {
     const { transport } = fakeTransport({
       version: VERSION_486,

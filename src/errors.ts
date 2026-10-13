@@ -95,12 +95,16 @@ export function notInstalledError(wsCode?: number, cause?: unknown): EimzoError<
 const STATUS_KEY_NOT_FOUND = [-1010, -1014];
 // -5000 «Ввод пароля отменен»: кнопка «Отмена» в окне пароля.
 const STATUS_CANCELLED = [-5000];
+// Неверный пароль PFX. Старые версии: BadPaddingException. E-IMZO 6.3 — status -9999 с текстом
+// «Sequence tag error» или «getSecretKey failed: Password is not ASCII» (пароль в другой раскладке).
+// -9999 бывает и у других ошибок, поэтому сверяем текст.
+const WRONG_PASSWORD_REASONS = /BadPaddingException|Sequence tag error|getSecretKey failed/;
 
 /** Превращает неуспешный ответ E-IMZO (`status`, `reason`) в типизированную ошибку. */
 export function errorFromResponse(res: { status?: number; reason?: string }): EimzoError {
   const { status, reason } = res;
   const details = { reason, status };
-  if (reason && reason.indexOf('BadPaddingException') !== -1) return new EimzoError('WRONG_PASSWORD', {}, details);
+  if (reason && WRONG_PASSWORD_REASONS.test(reason)) return new EimzoError('WRONG_PASSWORD', {}, details);
   if (status !== undefined && STATUS_KEY_NOT_FOUND.indexOf(status) !== -1) {
     return new EimzoError('KEY_NOT_FOUND', {}, details);
   }

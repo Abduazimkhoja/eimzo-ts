@@ -5,6 +5,13 @@
 
 ## [Unreleased]
 
+## [0.1.2]
+
+### Исправлено
+
+- Неверный пароль в E-IMZO 6.3 (`status -9999`, «Sequence tag error» / «Password is not ASCII»)
+  теперь даёт `WRONG_PASSWORD`, а не `EIMZO_ERROR`.
+
 ## [0.1.1]
 
 ### Исправлено
@@ -28,6 +35,7 @@
 - Сборки ESM, CJS и IIFE (`EimzoClient`) с типами.
 - Демо с режимом без E-IMZO и просмотром содержимого PKCS#7.
 
-[Unreleased]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.1.1...HEAD
+[Unreleased]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.1.2...HEAD
+[0.1.2]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/abduazimkhuja/eimzo-ts/releases/tag/v0.1.0
