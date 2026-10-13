@@ -24,7 +24,7 @@ export type MessageOverrides = Record<string, Partial<EimzoMessages>>;
 
 /**
  * Текст ошибки на нужном языке. Порядок поиска: `overrides[locale]` → встроенный `locale`
- * → русский. Для не-`EimzoError` возвращает `error.message`.
+ * → `overrides.ru` → встроенный русский. Для не-`EimzoError` возвращает `error.message`.
  */
 export function formatEimzoError(
   error: unknown,
@@ -37,6 +37,7 @@ export function formatEimzoError(
   const code = error.code as EimzoErrorCode;
   const format = (overrides[locale]?.[code] ??
     builtinMessages[locale as BuiltinLocale]?.[code] ??
+    overrides[DEFAULT_LOCALE]?.[code] ??
     ru[code]) as (params: unknown) => string;
   return format(error.params);
 }

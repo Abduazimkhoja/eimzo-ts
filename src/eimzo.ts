@@ -1,3 +1,4 @@
+import { abortable, abortReason, throwIfAborted, type EimzoCallOptions } from './abort';
 import { bytesToBase64, utf8ToBase64 } from './base64';
 import type { EimzoBackend } from './backend';
 import { parseCertificateInfo, type EimzoKey, type PfxKey, type TokenKey } from './certificate';
@@ -45,7 +46,7 @@ export interface EimzoOptions<TLogin = unknown> extends WebSocketTransportOption
   autoReloadKey?: boolean;
 }
 
-export interface LoadKeyOptions {
+export interface LoadKeyOptions extends EimzoCallOptions {
   /**
    * Сразу спросить пароль/PIN (`verify_password` / `verify_pin`).
    * Внимание: `verify_password` не показывает флажок «Запомнить на 6 час.»
@@ -54,7 +55,7 @@ export interface LoadKeyOptions {
   verifyPassword?: boolean;
 }
 
-export interface SignOptions {
+export interface SignOptions extends EimzoCallOptions {
   /** PKCS#7 без вложенных данных (detached). По умолчанию — с данными (attached). */
   detached?: boolean;
   /** Строка `data` уже в base64 (например, содержимое файла). */
@@ -65,7 +66,7 @@ export interface SignOptions {
 
 export type SignableData = string | Uint8Array | ArrayBuffer;
 
-export interface SignFileOptions {
+export interface SignFileOptions extends EimzoCallOptions {
   /** По умолчанию `true`: файл хранится у вас, класть его копию в подпись незачем. */
   detached?: boolean;
   /** Максимальный размер файла в байтах. По умолчанию 10 МБ. */
@@ -86,10 +87,16 @@ export const DEV_API_KEYS: Record<string, string> = {
 
 const DEFAULT_MIN_VERSION = '4.86';
 // Пороги из e-imzo-client.js (NEW_API2 / NEW_API3).
-const VERSION_PFX_ONLY = 412;
-const VERSION_BAIK_CKC = 486;
+const VERSION_PFX_ONLY: EimzoVersion = { major: 4, minor: 12 };
+const VERSION_BAIK_CKC: EimzoVersion = { major: 4, minor: 86 };
 
-const versionNumber = (v: EimzoVersion) => v.major * 100 + v.minor;
+const atLeast = (v: EimzoVersion, min: EimzoVersion) =>
+  v.major !== min.major ? v.major > min.major : v.minor >= min.minor;
+
+// Поля ответов E-IMZO, которые читает клиент. Значения не доверяем: проверяем перед использованием.
+interface VersionResponse { major?: string; minor?: string }
+interface PfxEntry { disk: string; path: string; name: string; alias: string }
+interface TokenEntry { cardUID: string; statusInfo: string; ownerName: string; info: string }
 
 function parseVersion(value: string): EimzoVersion {
   const [major, minor] = value.split('.').map((part) => parseInt(part, 10));
@@ -158,31 +165,45 @@ export class Eimzo<TLogin = unknown> {
   /**
    * Операции, которые могут открыть окно пароля, выполняются строго по одной:
    * двойной клик по «Подписать» не откроет два окна, второй вызов дождётся первого.
+   * Отмена сразу отклоняет Promise вызывающего. Операция, ждущая в очереди, не запускается.
+   * У запущенной вызов E-IMZO не обрывается (окно пароля уже может быть открыто),
+   * следующие шаги пропускаются, а очередь ждёт ответа E-IMZO — второго окна не будет.
+   * Поэтому внутри очереди `signal` проверяется между шагами и передаётся только в backend.
    */
-  private exclusive<T>(work: () => Promise<T>): Promise<T> {
-    const run = this.queue.then(work, work);
+  private exclusive<T>(work: () => Promise<T>, signal?: AbortSignal): Promise<T> {
+    const start = () => {
+      throwIfAborted(signal);
+      return work();
+    };
+    const run = this.queue.then(start, start);
     this.queue = run.catch(() => undefined);
-    return this.guard(() => run);
+    return this.guard(() => abortable(run, signal));
   }
 
   /**
    * Проверяет версию и устанавливает API-ключи. Вызывается автоматически перед любой
    * операцией; результат кешируется, после ошибки следующий вызов пробует заново.
+   * Отмена прекращает ожидание только для этого вызова: проверка общая для всех.
    */
-  init(): Promise<EimzoVersion> {
+  init(options: EimzoCallOptions = {}): Promise<EimzoVersion> {
+    return this.guard(() => this.whenReady(options.signal));
+  }
+
+  private whenReady(signal?: AbortSignal): Promise<EimzoVersion> {
+    // До запуска init: иначе отказ общего init остался бы без обработчика.
+    if (signal?.aborted) return Promise.reject(abortReason(signal));
     if (!this.ready) {
       this.ready = this.doInit().catch((error) => {
         this.ready = null;
         throw error;
       });
     }
-    const ready = this.ready;
-    return this.guard(() => ready);
+    return abortable(this.ready, signal);
   }
 
   private async doInit(): Promise<EimzoVersion> {
     const version = await this.readVersion();
-    if (versionNumber(version) < versionNumber(this.minVersion)) {
+    if (!atLeast(version, this.minVersion)) {
       throw new EimzoError('OUTDATED_VERSION', {
         installed: `${version.major}.${version.minor}`,
         min: `${this.minVersion.major}.${this.minVersion.minor}`,
@@ -197,53 +218,61 @@ export class Eimzo<TLogin = unknown> {
   }
 
   /** Версия установленного E-IMZO. Не требует API-ключа. */
-  getVersion(): Promise<EimzoVersion> {
-    return this.guard(() => this.readVersion());
+  getVersion(options: EimzoCallOptions = {}): Promise<EimzoVersion> {
+    return this.guard(() => this.readVersion(options.signal));
   }
 
-  private async readVersion(): Promise<EimzoVersion> {
-    const res = await this.transport({ name: 'version' });
+  private async readVersion(signal?: AbortSignal): Promise<EimzoVersion> {
+    const res: EimzoResponse & VersionResponse = await this.transport({ name: 'version' }, { signal });
     if (!res.success) throw errorFromResponse(res);
-    const major = parseInt(res.major, 10);
-    const minor = parseInt(res.minor, 10);
+    const major = parseInt(res.major ?? '', 10);
+    const minor = parseInt(res.minor ?? '', 10);
     if (isNaN(major) || isNaN(minor)) throw new EimzoError('EIMZO_ERROR', { reason: 'version is undefined' });
     return { major, minor };
   }
 
-  /** Прямой вызов функции плагина E-IMZO (см. http://127.0.0.1:64646/apidoc.html). */
-  call(plugin: string, name: string, args: unknown[] = []): Promise<EimzoResponse> {
-    return this.guard(() => this.invoke(plugin, name, args));
+  /**
+   * Прямой вызов функции плагина E-IMZO (см. http://127.0.0.1:64646/apidoc.html).
+   * Не встаёт в очередь `sign()`/`loadKey()`: функции, открывающие окно пароля,
+   * не вызывайте параллельно с ними.
+   */
+  call(plugin: string, name: string, args: unknown[] = [], options: EimzoCallOptions = {}): Promise<EimzoResponse> {
+    return this.guard(() => this.invoke(plugin, name, args, options.signal));
   }
 
-  private async invoke(plugin: string, name: string, args: unknown[] = []): Promise<EimzoResponse> {
-    await this.init();
-    const res = await this.transport({ plugin, name, arguments: args });
+  /** `R` — поля ответа, которые читает вызывающий код. */
+  private async invoke<R = object>(
+    plugin: string,
+    name: string,
+    args: unknown[] = [],
+    signal?: AbortSignal,
+  ): Promise<EimzoResponse & R> {
+    await this.whenReady(signal);
+    const res = await this.transport({ plugin, name, arguments: args }, { signal });
     if (!res.success) throw errorFromResponse(res);
-    return res;
+    return res as EimzoResponse & R;
   }
 
   /** PFX-ключи (и токены `ftjc` для E-IMZO старше 4.12). Ключи без ИНН и ПИНФЛ пропускаются. */
-  listKeys(): Promise<EimzoKey[]> {
+  listKeys(options: EimzoCallOptions = {}): Promise<EimzoKey[]> {
+    const { signal } = options;
     return this.guard(async () => {
-      const version = await this.init();
-      const sources: Promise<EimzoKey[]>[] = [this.listPfx()];
-      if (versionNumber(version) < VERSION_PFX_ONLY) sources.push(this.listTokens());
+      const version = await this.whenReady(signal);
+      const sources: Promise<EimzoKey[]>[] = [this.listPfx(signal)];
+      if (!atLeast(version, VERSION_PFX_ONLY)) sources.push(this.listTokens(signal));
 
       const results = await Promise.allSettled(sources);
-      const keys: EimzoKey[] = [];
-      let firstError: unknown;
-      for (const r of results) {
-        if (r.status === 'fulfilled') keys.push(...r.value);
-        else if (firstError === undefined) firstError = r.reason;
-      }
+      const keys = results.flatMap((r) => (r.status === 'fulfilled' ? r.value : []));
+      const failure = results.find((r) => r.status === 'rejected');
+      throwIfAborted(signal);
       // Как в оригинале: ошибка, только если ничего не нашлось.
-      if (keys.length === 0 && firstError !== undefined) throw firstError;
+      if (keys.length === 0 && failure) throw failure.reason;
       return keys;
     });
   }
 
-  private async listPfx(): Promise<PfxKey[]> {
-    const res = await this.invoke('pfx', 'list_all_certificates');
+  private async listPfx(signal?: AbortSignal): Promise<PfxKey[]> {
+    const res = await this.invoke<{ certificates?: PfxEntry[] }>('pfx', 'list_all_certificates', [], signal);
     const now = new Date();
     const keys: PfxKey[] = [];
     for (const el of res.certificates ?? []) {
@@ -253,8 +282,8 @@ export class Eimzo<TLogin = unknown> {
     return keys;
   }
 
-  private async listTokens(): Promise<TokenKey[]> {
-    const res = await this.invoke('ftjc', 'list_all_keys', ['']);
+  private async listTokens(signal?: AbortSignal): Promise<TokenKey[]> {
+    const res = await this.invoke<{ tokens?: TokenEntry[] }>('ftjc', 'list_all_keys', [''], signal);
     const now = new Date();
     const keys: TokenKey[] = [];
     for (const el of res.tokens ?? []) {
@@ -274,13 +303,14 @@ export class Eimzo<TLogin = unknown> {
   }
 
   /** Какие аппаратные носители подключены. Носители, которые версия E-IMZO не поддерживает, — `false`. */
-  listDevices(): Promise<Record<DeviceType, boolean>> {
+  listDevices(options: EimzoCallOptions = {}): Promise<Record<DeviceType, boolean>> {
+    const { signal } = options;
     return this.guard(async () => {
-      const v = versionNumber(await this.init());
+      const v = await this.whenReady(signal);
       const check = async (enabled: boolean, plugin: string, name: string, field: string) => {
         if (!enabled) return false;
         try {
-          const res = await this.invoke(plugin, name);
+          const res = await this.invoke(plugin, name, [], signal);
           return Array.isArray(res[field]) && res[field].length > 0;
         } catch (error) {
           // Ошибка плагина = носителя нет; ошибки связи пробрасываем.
@@ -289,9 +319,9 @@ export class Eimzo<TLogin = unknown> {
         }
       };
       const [idcard, baikey, ckc] = await Promise.all([
-        check(v >= VERSION_PFX_ONLY, 'idcard', 'list_readers', 'readers'),
-        check(v >= VERSION_BAIK_CKC, 'baikey', 'list_tokens', 'tokens'),
-        check(v >= VERSION_BAIK_CKC, 'ckc', 'list_ckc', 'devices'),
+        check(atLeast(v, VERSION_PFX_ONLY), 'idcard', 'list_readers', 'readers'),
+        check(atLeast(v, VERSION_BAIK_CKC), 'baikey', 'list_tokens', 'tokens'),
+        check(atLeast(v, VERSION_BAIK_CKC), 'ckc', 'list_ckc', 'devices'),
       ]);
       return { idcard, baikey, ckc };
     });
@@ -306,33 +336,38 @@ export class Eimzo<TLogin = unknown> {
    * возвращается её ошибка, а `keyId` сохраняется для повторного `unloadKey()`.
    */
   loadKey(key: EimzoKey | DeviceType, options: LoadKeyOptions = {}): Promise<string> {
-    return this.exclusive(() => this.doLoadKey(key, options));
+    return this.exclusive(() => this.doLoadKey(key, options), options.signal);
   }
 
   private async doLoadKey(key: EimzoKey | DeviceType, options: LoadKeyOptions): Promise<string> {
+    const { signal } = options;
     await this.releaseCurrentKey();
-    let keyId: string;
+    throwIfAborted(signal);
+    let keyId: unknown;
     if (typeof key === 'string') {
       keyId = key;
     } else if (key.type === 'pfx') {
-      keyId = (await this.invoke('pfx', 'load_key', [key.disk, key.path, key.name, key.alias])).keyId;
+      keyId = (await this.invoke<{ keyId?: unknown }>('pfx', 'load_key', [key.disk, key.path, key.name, key.alias])).keyId;
     } else {
-      keyId = (await this.invoke('ftjc', 'load_key', [key.cardUID])).keyId;
+      keyId = (await this.invoke<{ keyId?: unknown }>('ftjc', 'load_key', [key.cardUID])).keyId;
     }
     if (typeof keyId !== 'string' || !keyId) {
       throw new EimzoError('EIMZO_ERROR', { reason: 'invalid keyId in response' });
     }
     this.currentKey = key;
     this.currentKeyId = keyId;
-    if (options.verifyPassword && typeof key !== 'string') {
-      try {
+    try {
+      if (options.verifyPassword && typeof key !== 'string') {
+        throwIfAborted(signal);
         if (key.type === 'pfx') await this.invoke('pfx', 'verify_password', [keyId]);
         else await this.invoke('ftjc', 'verify_pin', [keyId, '1']);
-      } catch (error) {
-        // load_key уже создал сессию; при сбое очистки сохраняем её для повторной выгрузки.
-        await this.releaseCurrentKey();
-        throw error;
       }
+      // Вызывающий уже получил отказ: ключ, загруженный после отмены, выгружаем.
+      throwIfAborted(signal);
+    } catch (error) {
+      // load_key уже создал сессию; при сбое очистки сохраняем её для повторной выгрузки.
+      await this.releaseCurrentKey();
+      throw error;
     }
     return keyId;
   }
@@ -363,7 +398,7 @@ export class Eimzo<TLogin = unknown> {
 
   /** Создаёт PKCS#7 (base64). Пароль спрашивает окно E-IMZO, сайт его не видит. */
   sign(data: SignableData, options: SignOptions = {}): Promise<string> {
-    return this.exclusive(() => this.doSign(data, options));
+    return this.exclusive(() => this.doSign(data, options), options.signal);
   }
 
   /**
@@ -375,8 +410,8 @@ export class Eimzo<TLogin = unknown> {
       const max = options.maxSize ?? DEFAULT_MAX_FILE_SIZE;
       if (file.size > max) throw new EimzoError('FILE_TOO_LARGE', { size: file.size, max });
       const bytes = new Uint8Array(await file.arrayBuffer());
-      return this.doSign(bytes, { detached: options.detached ?? true, keyId: options.keyId });
-    });
+      return this.doSign(bytes, { detached: options.detached ?? true, keyId: options.keyId, signal: options.signal });
+    }, options.signal);
   }
 
   private async doSign(data: SignableData, options: SignOptions): Promise<string> {
@@ -384,7 +419,8 @@ export class Eimzo<TLogin = unknown> {
     if (!keyId) throw new EimzoError('KEY_NOT_LOADED');
     const data64 = toBase64(data, options.base64 === true);
     const create = async (id: string): Promise<string> => {
-      const res = await this.invoke('pkcs7', 'create_pkcs7', [data64, id, options.detached ? 'yes' : 'no']);
+      throwIfAborted(options.signal);
+      const res = await this.invoke<{ pkcs7_64?: unknown }>('pkcs7', 'create_pkcs7', [data64, id, options.detached ? 'yes' : 'no']);
       if (typeof res.pkcs7_64 !== 'string' || !res.pkcs7_64) {
         throw new EimzoError('EIMZO_ERROR', { reason: 'invalid pkcs7_64 in response' });
       }
@@ -403,7 +439,7 @@ export class Eimzo<TLogin = unknown> {
         typeof key !== 'string';
       if (!canReload) throw error;
       this.currentKeyId = null; // старый keyId уже недействителен, выгружать нечего
-      return create(await this.doLoadKey(key, {}));
+      return create(await this.doLoadKey(key, { signal: options.signal }));
     }
   }
 
@@ -411,14 +447,16 @@ export class Eimzo<TLogin = unknown> {
    * Вход по ЭЦП: challenge с backend → `loadKey` → подпись challenge → `backend.login`.
    * Возвращает то, что вернул `backend.login` (сессия, JWT и т.п.).
    */
-  login(key: EimzoKey | DeviceType): Promise<TLogin> {
+  login(key: EimzoKey | DeviceType, options: EimzoCallOptions = {}): Promise<TLogin> {
+    const { signal } = options;
     return this.exclusive(async () => {
       const backend = this.requireBackend('getChallenge', 'login');
-      const challenge = await backend.getChallenge!();
-      await this.doLoadKey(key, {});
-      const pkcs7 = await this.doSign(challenge, {});
-      return backend.login!(pkcs7);
-    });
+      const challenge = await backend.getChallenge!({ signal });
+      await this.doLoadKey(key, { signal });
+      const pkcs7 = await this.doSign(challenge, { signal });
+      throwIfAborted(signal);
+      return backend.login!(pkcs7, { signal });
+    }, signal);
   }
 
   /** Подпись документа загруженным ключом + метка времени через backend. */
@@ -426,8 +464,9 @@ export class Eimzo<TLogin = unknown> {
     return this.exclusive(async () => {
       const backend = this.requireBackend('timestamp');
       const pkcs7 = await this.doSign(data, options);
-      return backend.timestamp!(pkcs7);
-    });
+      throwIfAborted(options.signal);
+      return backend.timestamp!(pkcs7, { signal: options.signal });
+    }, options.signal);
   }
 
   private requireBackend(...methods: (keyof EimzoBackend)[]): EimzoBackend<TLogin> {

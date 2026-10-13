@@ -49,10 +49,12 @@ Detailed API and examples: `README.md`, `skills/eimzo-ts/` (Agent Skill), `docs/
 
 ## Working in this repository
 
-- Package manager: **npm** (`package-lock.json`). Node 20+ for development (CI runs 20 and 22).
+- Package manager: **npm** (`package-lock.json`). Node 22+ for development (CI runs 22 and 24).
 - Commands:
+  - `npm run check` — everything CI runs: lint, typecheck, tests with coverage thresholds, build, `publint`, `attw`
   - `npm test` — vitest, all tests use a fake transport (no E-IMZO needed)
-  - `npm run typecheck` — `tsc --noEmit`
+  - `npm run typecheck` — `tsc --noEmit`, also checks public API types in `test/types.test.ts`
+  - `npm run lint` — ESLint with type-aware rules (`no-floating-promises` etc.)
   - `npm run build` — tsup → `dist/` (ESM, CJS, IIFE global `EimzoClient`, `.d.ts`)
   - `npm run demo` — build and serve `http://localhost:3000/demo/`
   - `npm run check:eimzo` — runs against a real local E-IMZO; `-- --interactive N` opens password windows
@@ -61,7 +63,10 @@ Detailed API and examples: `README.md`, `skills/eimzo-ts/` (Agent Skill), `docs/
   `src/certificate.ts` (X.500 alias parsing), `src/backend.ts` (`createFetchBackend`).
 - Code comments and locale texts are in Russian; keep that style. No runtime dependencies — do not add any.
 - Every public method goes through `guard` (localized messages); methods that can open a password window go
-  through `exclusive` (one at a time). Keep new methods consistent with that.
+  through `exclusive` (one at a time). Methods that wait on E-IMZO or the backend accept `{ signal }`
+  (`EimzoCallOptions`) and pass it down to `invoke`/`transport`/`backend`. Keep new methods consistent with that.
+- Read fields of E-IMZO responses through `invoke<{ field?: unknown }>(...)` and validate them; do not rely on
+  the `any` index signature of `EimzoResponse` (it stays only for compatibility of `call()`).
 - E-IMZO response mappings in `src/errors.ts` are based on real responses from E-IMZO 6.3.5. Add a test with
   the exact real response when you add a mapping.
 - Do not print key owners' personal data (names, PINFL, TIN) from real E-IMZO in logs or commits; the check

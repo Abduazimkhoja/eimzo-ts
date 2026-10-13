@@ -73,6 +73,8 @@ const pkcs7 = await eimzo.signDocument('документ'); // подпись + 
 | `call(plugin, name, args)` | Любая функция E-IMZO, см. `http://127.0.0.1:64646/apidoc.html`. |
 | `setLocale(locale)`, `t(error)` | Язык сообщений об ошибках. |
 
+Все методы, которые ждут E-IMZO или backend, кроме `unloadKey`, принимают `{ signal }`, см. [Отмена](#отмена).
+
 ### Опции `createEimzo`
 
 | Опция | По умолчанию | |
@@ -81,9 +83,9 @@ const pkcs7 = await eimzo.signDocument('документ'); // подпись + 
 | `backend` | — | `createFetchBackend(...)` или свой объект, см. ниже. |
 | `minVersion` | `'4.86'` | Ниже — ошибка `OUTDATED_VERSION`. |
 | `locale` | `'ru'` | `'ru'`, `'uz-Latn'`, `'uz-Cyrl'`, `'kaa'`, `'en'` или свой код. |
-| `messages` | — | Свои тексты ошибок. |
+| `messages` | — | Свои тексты ошибок. Недостающие берутся из `messages.ru`, затем из встроенного русского. |
 | `autoReloadKey` | `true` | Если E-IMZO забыл `keyId`, загрузить ключ заново и повторить подпись. |
-| `timeoutMs` | без ограничения | Таймаут вызова E-IMZO. |
+| `timeoutMs` | без ограничения | Таймаут каждого вызова E-IMZO. Для одной операции — `signal: AbortSignal.timeout(ms)`. |
 | `url`, `WebSocketImpl`, `transport` | | Для тестов и нестандартного окружения. |
 
 ## Ошибки
@@ -131,7 +133,23 @@ const eimzo = createEimzo({
 eimzo.setLocale('en');
 ```
 
-Недостающие тексты берутся из русского. Без экземпляра: `formatEimzoError(error, 'en')`.
+Недостающие тексты берутся из `messages.ru`, затем из встроенного русского. Без экземпляра: `formatEimzoError(error, 'en')`.
+
+## Отмена
+
+Методы принимают `AbortSignal`, как `fetch`: при размонтировании компонента, уходе со страницы или для
+ограничения времени одной операции.
+
+```ts
+const controller = new AbortController();
+const keys = await eimzo.listKeys({ signal: controller.signal });
+await eimzo.sign(data, { signal: AbortSignal.timeout(60_000) });
+controller.abort(); // ожидающий вызов отклонится с signal.reason (по умолчанию AbortError)
+```
+
+Отменённый вызов отклоняется с `signal.reason`, а не с `EimzoError`: проверяйте `e.name === 'AbortError'`.
+Операция, ещё стоящая в очереди подписи, не запускается. Окно пароля, которое E-IMZO уже открыл, остаётся
+открытым — закрыть его извне нельзя, и следующая операция в очереди дождётся его.
 
 ## Пароль
 
@@ -150,7 +168,7 @@ e-imzo-server, поэтому backend может проксировать зап
 | Запрос клиента | Backend | Ответ |
 |---|---|---|
 | `GET challengeUrl` | `GET /frontend/challenge`, без кеша | `{ "status": 1, "challenge": "..." }` |
-| `POST loginUrl`, тело — PKCS#7 | `POST /backend/auth`, поиск пользователя по ПИНФЛ/ИНН, сессия | любой JSON — вернётся из `login()` |
+| `POST loginUrl`, тело — PKCS#7 | `POST /backend/auth`, поиск пользователя по ПИНФЛ/ИНН, сессия | любой JSON — вернётся из `login()` как есть; `204 No Content` — `null` |
 | `POST timestampUrl`, тело — PKCS#7 | `POST /frontend/timestamp/pkcs7` | `{ "status": 1, "pkcs7b64": "..." }` |
 
 Подробно, с примером на Java (Spring Boot): [docs/backend.md](docs/backend.md).
@@ -221,12 +239,19 @@ onMounted(async () => { keys.value = await eimzo.listKeys(); });
 
 ```bash
 npm install
+npm run check          # всё, что запускает CI: линтер, типы, тесты с покрытием, сборка, проверка пакета
 npm test               # vitest
-npm run typecheck
+npm run lint           # ESLint с проверками по типам
+npm run typecheck      # tsc, включая тесты типов публичного API
 npm run build          # dist/: ESM, CJS, IIFE + .d.ts
 npm run demo           # http://localhost:3000/demo/
 npm run check:eimzo    # проверка на установленном E-IMZO; --interactive N — с подписью ключом N
 ```
+
+## Участие в разработке
+
+Ошибки и pull request'ы — по правилам в [CONTRIBUTING.md](CONTRIBUTING.md). Об уязвимостях сообщайте
+приватно, см. [SECURITY.md](SECURITY.md).
 
 ## Лицензия
 

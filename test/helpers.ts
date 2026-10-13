@@ -1,18 +1,21 @@
-import type { EimzoRequest, EimzoResponse, Transport } from '../src';
+import type { EimzoRequest, EimzoResponse, Transport, EimzoCallOptions } from '../src';
 
-type Handler = (req: EimzoRequest) => EimzoResponse | Promise<EimzoResponse>;
+type Handler = (req: EimzoRequest, options?: EimzoCallOptions) => EimzoResponse | Promise<EimzoResponse>;
 
 /** Транспорт-заглушка: ответы по ключу `plugin.name` (или `name` для version/apikey). */
 export function fakeTransport(handlers: Record<string, Handler | EimzoResponse>) {
   const calls: EimzoRequest[] = [];
-  const transport: Transport = async (req) => {
+  /** `signal` каждого вызова, по порядку `calls`. */
+  const signals: (AbortSignal | undefined)[] = [];
+  const transport: Transport = async (req, options) => {
     calls.push(req);
+    signals.push(options?.signal);
     const key = req.plugin ? `${req.plugin}.${req.name}` : req.name;
     const handler = handlers[key];
     if (!handler) return { success: false, reason: `no handler for ${key}` };
-    return typeof handler === 'function' ? handler(req) : handler;
+    return typeof handler === 'function' ? handler(req, options) : handler;
   };
-  return { transport, calls };
+  return { transport, calls, signals };
 }
 
 export const VERSION_486 = { success: true, major: '4', minor: '86' };

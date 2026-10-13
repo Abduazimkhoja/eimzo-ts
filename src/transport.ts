@@ -1,3 +1,4 @@
+import { abortable, abortReason, type EimzoCallOptions } from './abort';
 import { EimzoError, notInstalledError } from './errors';
 
 export interface EimzoRequest {
@@ -9,11 +10,18 @@ export interface EimzoRequest {
 export interface EimzoResponse {
   success: boolean;
   reason?: string;
+  // Ответы плагинов E-IMZO разнородны; `any` оставлен ради совместимости с кодом,
+  // который читает поля ответа `call()`. Внутри библиотеки поля типизируются явно.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   [key: string]: any;
 }
 
-/** Один вызов функции E-IMZO. Подменяется в тестах или для нестандартного окружения. */
-export type Transport = (request: EimzoRequest) => Promise<EimzoResponse>;
+/**
+ * Один вызов функции E-IMZO. Подменяется в тестах или для нестандартного окружения.
+ * `options.signal` необязателен для своих реализаций: без него отмена срабатывает
+ * только между вызовами.
+ */
+export type Transport = (request: EimzoRequest, options?: EimzoCallOptions) => Promise<EimzoResponse>;
 
 export interface WebSocketTransportOptions {
   /** По умолчанию выбирается по протоколу страницы, см. `defaultEimzoUrl()`. */
@@ -42,8 +50,12 @@ export function defaultEimzoUrl(): string {
 
 /** Как `CAPIWS` в e-imzo.js: одно WebSocket-соединение на каждый вызов. */
 export function createWebSocketTransport(options: WebSocketTransportOptions = {}): Transport {
-  return (request) =>
+  return (request, { signal } = {}) =>
     new Promise<EimzoResponse>((resolve, reject) => {
+      if (signal?.aborted) {
+        reject(abortReason(signal));
+        return;
+      }
       const WS = options.WebSocketImpl ?? (globalThis as { WebSocket?: typeof WebSocket }).WebSocket;
       if (!WS) {
         reject(new EimzoError('WEBSOCKET_UNSUPPORTED'));
@@ -60,12 +72,18 @@ export function createWebSocketTransport(options: WebSocketTransportOptions = {}
 
       let settled = false;
       let timer: ReturnType<typeof setTimeout> | undefined;
+      const onAbort = () => {
+        settle(() => reject(abortReason(signal!)));
+        socket.close();
+      };
       const settle = (fn: () => void) => {
         if (settled) return;
         settled = true;
         if (timer !== undefined) clearTimeout(timer);
+        signal?.removeEventListener('abort', onAbort);
         fn();
       };
+      signal?.addEventListener('abort', onAbort, { once: true });
 
       if (options.timeoutMs) {
         timer = setTimeout(() => {
@@ -99,9 +117,11 @@ export function createWebSocketTransport(options: WebSocketTransportOptions = {}
 }
 
 export function createCapiwsTransport(capiws: CapiwsLike, options: Pick<WebSocketTransportOptions, 'timeoutMs'> = {}): Transport {
-  return (request) => {
+  return (request, { signal } = {}) => {
     let timer: ReturnType<typeof setTimeout> | undefined;
-    return new Promise<EimzoResponse>((resolve, reject) => {
+    // Расширение не умеет отменять вызов: отмена только прекращает ожидание ответа.
+    if (signal?.aborted) return Promise.reject(abortReason(signal));
+    const call = new Promise<EimzoResponse>((resolve, reject) => {
       if (options.timeoutMs) {
         timer = setTimeout(() => reject(new EimzoError('TIMEOUT')), options.timeoutMs);
       }
@@ -110,7 +130,8 @@ export function createCapiwsTransport(capiws: CapiwsLike, options: Pick<WebSocke
       if (!request.plugin && request.name === 'version') capiws.version(ok, fail);
       else if (!request.plugin && request.name === 'apikey') capiws.apikey(request.arguments ?? [], ok, fail);
       else capiws.callFunction(request, ok, fail);
-    }).finally(() => {
+    });
+    return abortable(call, signal).finally(() => {
       if (timer !== undefined) clearTimeout(timer);
     });
   };
@@ -122,8 +143,8 @@ export function createCapiwsTransport(capiws: CapiwsLike, options: Pick<WebSocke
  */
 export function createDefaultTransport(options: WebSocketTransportOptions = {}): Transport {
   const ws = createWebSocketTransport(options);
-  return (request) => {
+  return (request, callOptions) => {
     const ext = (globalThis as { EIMZOEXT?: CapiwsLike }).EIMZOEXT;
-    return ext ? createCapiwsTransport(ext, options)(request) : ws(request);
+    return ext ? createCapiwsTransport(ext, options)(request, callOptions) : ws(request, callOptions);
   };
 }

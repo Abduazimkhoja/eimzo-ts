@@ -12,6 +12,7 @@ export {
   type SignOptions,
   type SignableData,
 } from './eimzo';
+export type { EimzoCallOptions } from './abort';
 export { createFetchBackend, type EimzoBackend, type FetchBackendOptions } from './backend';
 export {
   parseCertificateInfo,

@@ -173,6 +173,40 @@ describe('createFetchBackend', () => {
     await expect(createFetchBackend({ loginUrl: '/l', fetch: respond({ token: 'test' }) }).login!('P')).resolves.toEqual({ token: 'test' });
   });
 
+  it('ответ login с полем status возвращается как есть: формат e-imzo-server проверяется только у challenge и timestamp', async () => {
+    const body = { status: 'ok', token: 't' };
+    await expect(createFetchBackend({ loginUrl: '/l', fetch: respond(body) }).login!('P')).resolves.toEqual(body);
+  });
+
+  it('login: 204 No Content (сессия в cookie) — null', async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    await expect(createFetchBackend({ loginUrl: '/l', fetch }).login!('P')).resolves.toBeNull();
+  });
+
+  it('timestamp без status: 1 — BACKEND_ERROR', async () => {
+    const backend = createFetchBackend({ timestampUrl: '/t', fetch: respond({ status: -10, message: 'tsa down' }) });
+    await expect(backend.timestamp!('P')).rejects.toMatchObject({ code: 'BACKEND_ERROR', params: { detail: 'tsa down' } });
+  });
+
+  it('сетевая ошибка — BACKEND_ERROR с исходной ошибкой в cause', async () => {
+    const cause = new TypeError('Failed to fetch');
+    const backend = createFetchBackend({ loginUrl: '/l', fetch: vi.fn().mockRejectedValue(cause) });
+    const error = await backend.login!('P').catch((e: unknown) => e);
+    expect(error).toMatchObject({ code: 'BACKEND_ERROR', params: { detail: 'Failed to fetch' } });
+    expect((error as Error).cause).toBe(cause);
+  });
+
+  it('передаёт signal в fetch; отмена — причина отмены, а не BACKEND_ERROR', async () => {
+    const controller = new AbortController();
+    const fetch = vi.fn((_url: RequestInfo | URL, init?: RequestInit) => {
+      controller.abort();
+      return Promise.reject(init!.signal!.reason);
+    });
+    const backend = createFetchBackend({ challengeUrl: '/c', fetch });
+    await expect(backend.getChallenge!({ signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetch.mock.calls[0][1]!.signal).toBe(controller.signal);
+  });
+
   it('HTTP-ошибка и status != 1 — BACKEND_ERROR', async () => {
     await expect(createFetchBackend({ loginUrl: '/l', fetch: respond({ message: 'no' }, 403) }).login!('P')).rejects.toMatchObject({
       code: 'BACKEND_ERROR',

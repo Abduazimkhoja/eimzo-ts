@@ -16,6 +16,12 @@ describe('init', () => {
     await expect(createEimzo({ transport }).init()).rejects.toMatchObject({ code: 'OUTDATED_VERSION' });
   });
 
+  it('сравнивает версии по частям, а не числом major*100+minor', async () => {
+    const { transport } = fakeTransport({ version: { success: true, major: '4', minor: '100' } });
+    await expect(createEimzo({ transport, minVersion: '5.0' }).init()).rejects.toMatchObject({ code: 'OUTDATED_VERSION' });
+    await expect(createEimzo({ transport, minVersion: '4.86' }).init()).resolves.toEqual({ major: 4, minor: 100 });
+  });
+
   it('передаёт API-ключи плоским массивом и сообщает об отказе', async () => {
     const { transport, calls } = fakeTransport({
       version: VERSION_486,
@@ -162,7 +168,7 @@ describe('login / signDocument', () => {
     const key = { type: 'pfx', disk: 'C:', path: 'p', name: 'n', alias: PFX_ALIAS } as PfxKey;
 
     expect(await eimzo.login(key)).toEqual({ token: 'jwt' });
-    expect(backend.login).toHaveBeenCalledWith('SIGNED');
+    expect(backend.login).toHaveBeenCalledWith('SIGNED', { signal: undefined });
     expect(calls.find((c) => c.name === 'create_pkcs7')!.arguments![0]).toBe(
       Buffer.from('challenge-123').toString('base64'),
     );

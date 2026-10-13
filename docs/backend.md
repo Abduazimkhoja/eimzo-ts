@@ -28,9 +28,11 @@
 ### Форматы ответов для `createFetchBackend`
 
 - `challenge`: `{"status": 1, "challenge": "..."}` — можно вернуть ответ e-imzo-server как есть.
-- `login`: любой JSON (например, профиль пользователя) — `eimzo.login()` вернёт его во фронтенд.
+- `login`: любой JSON (например, профиль пользователя) — `eimzo.login()` вернёт его во фронтенд как есть,
+  поле `status` в нём не проверяется. `204 No Content` (сессия только в cookie) — `null`.
+  Пустой или не-JSON ответ `200` (например, HTML-заглушка SPA) считается ошибкой.
 - `timestamp`: `{"status": 1, "pkcs7b64": "..."}` — тоже ответ e-imzo-server как есть.
-- Ошибка: HTTP 4xx/5xx или `status` не равен 1. Поле `message` попадёт в текст ошибки `BACKEND_ERROR`.
+- Ошибка: HTTP 4xx/5xx, сбой сети или, для `challenge` и `timestamp`, `status` не равен 1. Поле `message` попадёт в текст ошибки `BACKEND_ERROR`.
   Не отправляйте в `message` внутренние детали (stack trace, адреса серверов).
 
 ## Заголовки X-Real-IP и Host

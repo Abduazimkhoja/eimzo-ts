@@ -48,6 +48,11 @@ describe('локализация', () => {
     expect(eimzo.t(new EimzoError('KEY_NOT_LOADED'))).toBe(ru.KEY_NOT_LOADED({})); // нет в kk → русский
   });
 
+  it('нет текста в своём языке — берётся переопределённый русский, а не встроенный', () => {
+    const messages = { ru: { KEY_NOT_LOADED: () => 'Сначала выберите ключ' }, kk: {} };
+    expect(formatEimzoError(new EimzoError('KEY_NOT_LOADED'), 'kk', messages)).toBe('Сначала выберите ключ');
+  });
+
   it('formatEimzoError работает без экземпляра и для обычных ошибок', () => {
     const e = new EimzoError('BACKEND_ERROR', { status: 503 });
     expect(formatEimzoError(e, 'en')).toBe('Server error (HTTP 503).');

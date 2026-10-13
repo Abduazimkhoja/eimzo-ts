@@ -18,19 +18,22 @@ Without a bundler: `<script src="https://unpkg.com/eimzo-ts@0.1/dist/index.globa
 | Option | Type | Default | Notes |
 |---|---|---|---|
 | `apiKeys` | `Record<string, string> \| string[]` | — | Domain → API key. `DEV_API_KEYS` covers `localhost`, `127.0.0.1`. Omitted → `apikey` is not called. |
-| `backend` | `EimzoBackend<TLogin>` | — | `{ getChallenge?(): Promise<string>; login?(pkcs7): Promise<TLogin>; timestamp?(pkcs7): Promise<string> }` |
+| `backend` | `EimzoBackend<TLogin>` | — | `{ getChallenge?(opts?): Promise<string>; login?(pkcs7, opts?): Promise<TLogin>; timestamp?(pkcs7, opts?): Promise<string> }`; `opts = { signal? }` |
 | `minVersion` | `string` | `'4.86'` | `'major.minor'` |
 | `locale` | `string` | `'ru'` | `'ru' \| 'uz-Latn' \| 'uz-Cyrl' \| 'kaa' \| 'en'` or custom with `messages` |
-| `messages` | `Record<locale, Partial<Record<code, (params) => string>>>` | — | Missing texts fall back to Russian. |
+| `messages` | `Record<locale, Partial<Record<code, (params) => string>>>` | — | Missing texts fall back to `messages.ru`, then built-in Russian. |
 | `autoReloadKey` | `boolean` | `true` | On `KEY_NOT_FOUND`, reload the same key and retry `sign` once. Not applied when `keyId` is passed explicitly. |
-| `timeoutMs` | `number` | none | Per call. Signing waits for the user, so keep it unset or large. |
+| `timeoutMs` | `number` | none | Every call. Signing waits for the user, so keep it unset or large; prefer `signal: AbortSignal.timeout(ms)` per operation. |
 | `url` | `string` | `defaultEimzoUrl()` | `wss://127.0.0.1:64443/service/cryptapi` on https, `ws://127.0.0.1:64646/service/cryptapi` otherwise |
 | `WebSocketImpl` | `typeof WebSocket` | global | For non-browser environments. |
-| `transport` | `(req: { plugin?, name, arguments? }) => Promise<{ success: boolean, reason?, ... }>` | WebSocket or `EIMZOEXT` | Use for tests. |
+| `transport` | `(req: { plugin?, name, arguments? }, opts?: { signal? }) => Promise<{ success: boolean, reason?, ... }>` | WebSocket or `EIMZOEXT` | Use for tests. |
 
 ## Methods
 
-All return Promises and reject with `EimzoError`.
+All return Promises and reject with `EimzoError`. Every method except `unloadKey` also takes
+`{ signal?: AbortSignal }` (in its options object, or as the last argument); an aborted call rejects with
+`signal.reason` (an `AbortError` by default), not `EimzoError`. A queued call that is aborted never starts;
+an open E-IMZO password window is not closed.
 
 - `init(): Promise<{ major, minor }>` — version check + API keys. Cached; retried after a failure. Called by every method.
 - `getVersion(): Promise<{ major, minor }>`
@@ -55,12 +58,13 @@ All return Promises and reject with `EimzoError`.
 | Option | Method | Request | Expected response |
 |---|---|---|---|
 | `challengeUrl` | `getChallenge` | `GET`, `cache: 'no-store'` | `{ "status": 1, "challenge": "..." }` |
-| `loginUrl` | `login` | `POST`, body = PKCS#7, `Content-Type: text/plain` | any JSON or text, returned as is |
+| `loginUrl` | `login` | `POST`, body = PKCS#7, `Content-Type: text/plain` | any JSON, returned as is (its `status` is not checked); `204` → `null`; non-JSON `200` → `BACKEND_ERROR` |
 | `timestampUrl` | `timestamp` | `POST`, body = PKCS#7, `text/plain` | `{ "status": 1, "pkcs7b64": "..." }` |
 | `init` | all | merged into every `fetch` (headers, `credentials`) | |
 | `fetch` | all | custom fetch implementation | |
 
-Non-2xx or a JSON body with `status !== 1` → `BACKEND_ERROR` (`httpStatus`, `params.detail` from `message`).
+Non-2xx, a network failure, or (challenge and timestamp only) `status !== 1` → `BACKEND_ERROR`
+(`httpStatus`, `params.detail` from `message`, original error in `cause`).
 
 ## EimzoError
 
