@@ -20,7 +20,8 @@ export interface WebSocketTransportOptions {
   url?: string;
   /**
    * Таймаут одного вызова, мс. По умолчанию не ограничен: `create_pkcs7`
-   * ждёт, пока пользователь введёт пароль.
+   * ждёт, пока пользователь введёт пароль. Работает и через EIMZOEXT;
+   * завершает ожидание ответа, но не гарантирует отмену операции в E-IMZO.
    */
   timeoutMs?: number;
   /** Реализация WebSocket, если глобальной нет. */
@@ -73,7 +74,15 @@ export function createWebSocketTransport(options: WebSocketTransportOptions = {}
         }, options.timeoutMs);
       }
 
-      socket.onopen = () => socket.send(JSON.stringify(request));
+      socket.onopen = () => {
+        if (settled) return;
+        try {
+          socket.send(JSON.stringify(request));
+        } catch (cause) {
+          settle(() => reject(new EimzoError('EIMZO_ERROR', { reason: 'failed to send request' }, { cause })));
+          socket.close();
+        }
+      };
       socket.onmessage = (event) => {
         settle(() => {
           try {
@@ -89,15 +98,22 @@ export function createWebSocketTransport(options: WebSocketTransportOptions = {}
     });
 }
 
-export function createCapiwsTransport(capiws: CapiwsLike): Transport {
-  return (request) =>
-    new Promise<EimzoResponse>((resolve, reject) => {
+export function createCapiwsTransport(capiws: CapiwsLike, options: Pick<WebSocketTransportOptions, 'timeoutMs'> = {}): Transport {
+  return (request) => {
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    return new Promise<EimzoResponse>((resolve, reject) => {
+      if (options.timeoutMs) {
+        timer = setTimeout(() => reject(new EimzoError('TIMEOUT')), options.timeoutMs);
+      }
       const ok = (_event: unknown, data: EimzoResponse) => resolve(data);
       const fail = (code?: number) => reject(notInstalledError(code));
       if (!request.plugin && request.name === 'version') capiws.version(ok, fail);
       else if (!request.plugin && request.name === 'apikey') capiws.apikey(request.arguments ?? [], ok, fail);
       else capiws.callFunction(request, ok, fail);
+    }).finally(() => {
+      if (timer !== undefined) clearTimeout(timer);
     });
+  };
 }
 
 /**
@@ -108,6 +124,6 @@ export function createDefaultTransport(options: WebSocketTransportOptions = {}):
   const ws = createWebSocketTransport(options);
   return (request) => {
     const ext = (globalThis as { EIMZOEXT?: CapiwsLike }).EIMZOEXT;
-    return ext ? createCapiwsTransport(ext)(request) : ws(request);
+    return ext ? createCapiwsTransport(ext, options)(request) : ws(request);
   };
 }

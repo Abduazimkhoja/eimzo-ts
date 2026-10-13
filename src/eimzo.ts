@@ -302,6 +302,8 @@ export class Eimzo<TLogin = unknown> {
    * Для аппаратного носителя (`'idcard' | 'baikey' | 'ckc'`) E-IMZO не вызывается.
    * Каждый вызов для PFX создаёт новую сессию, и E-IMZO снова спросит пароль.
    * Предыдущий загруженный PFX-ключ выгружается из E-IMZO.
+   * При ошибке проверки пароля PFX выгружается; если очистка не удалась,
+   * возвращается её ошибка, а `keyId` сохраняется для повторного `unloadKey()`.
    */
   loadKey(key: EimzoKey | DeviceType, options: LoadKeyOptions = {}): Promise<string> {
     return this.exclusive(() => this.doLoadKey(key, options));
@@ -314,19 +316,31 @@ export class Eimzo<TLogin = unknown> {
       keyId = key;
     } else if (key.type === 'pfx') {
       keyId = (await this.invoke('pfx', 'load_key', [key.disk, key.path, key.name, key.alias])).keyId;
-      if (options.verifyPassword) await this.invoke('pfx', 'verify_password', [keyId]);
     } else {
       keyId = (await this.invoke('ftjc', 'load_key', [key.cardUID])).keyId;
-      if (options.verifyPassword) await this.invoke('ftjc', 'verify_pin', [keyId, '1']);
+    }
+    if (typeof keyId !== 'string' || !keyId) {
+      throw new EimzoError('EIMZO_ERROR', { reason: 'invalid keyId in response' });
     }
     this.currentKey = key;
     this.currentKeyId = keyId;
+    if (options.verifyPassword && typeof key !== 'string') {
+      try {
+        if (key.type === 'pfx') await this.invoke('pfx', 'verify_password', [keyId]);
+        else await this.invoke('ftjc', 'verify_pin', [keyId, '1']);
+      } catch (error) {
+        // load_key уже создал сессию; при сбое очистки сохраняем её для повторной выгрузки.
+        await this.releaseCurrentKey();
+        throw error;
+      }
+    }
     return keyId;
   }
 
   /**
    * Выгрузить ключ из E-IMZO и забыть его. Вызывайте при выходе пользователя:
    * иначе пароль, запомненный на 6 часов, останется в E-IMZO на этом компьютере.
+   * При сбое выгрузки `keyId` сохраняется, чтобы можно было повторить вызов.
    */
   unloadKey(): Promise<void> {
     return this.exclusive(() => this.releaseCurrentKey());
@@ -335,15 +349,16 @@ export class Eimzo<TLogin = unknown> {
   private async releaseCurrentKey(): Promise<void> {
     const key = this.currentKey;
     const keyId = this.currentKeyId;
+    if (keyId && key && typeof key !== 'string' && key.type === 'pfx') {
+      try {
+        await this.invoke('pfx', 'unload_key', [keyId]);
+      } catch (error) {
+        // Уже выгружен или E-IMZO перезапущен — цель достигнута.
+        if (!isEimzoError(error, 'KEY_NOT_FOUND')) throw error;
+      }
+    }
     this.currentKey = null;
     this.currentKeyId = null;
-    if (!keyId || !key || typeof key === 'string' || key.type !== 'pfx') return;
-    try {
-      await this.invoke('pfx', 'unload_key', [keyId]);
-    } catch (error) {
-      // Уже выгружен или E-IMZO перезапущен — цель достигнута.
-      if (!isEimzoError(error, 'KEY_NOT_FOUND')) throw error;
-    }
   }
 
   /** Создаёт PKCS#7 (base64). Пароль спрашивает окно E-IMZO, сайт его не видит. */
@@ -368,8 +383,13 @@ export class Eimzo<TLogin = unknown> {
     const keyId = options.keyId ?? this.currentKeyId;
     if (!keyId) throw new EimzoError('KEY_NOT_LOADED');
     const data64 = toBase64(data, options.base64 === true);
-    const create = (id: string) =>
-      this.invoke('pkcs7', 'create_pkcs7', [data64, id, options.detached ? 'yes' : 'no']).then((res) => res.pkcs7_64);
+    const create = async (id: string): Promise<string> => {
+      const res = await this.invoke('pkcs7', 'create_pkcs7', [data64, id, options.detached ? 'yes' : 'no']);
+      if (typeof res.pkcs7_64 !== 'string' || !res.pkcs7_64) {
+        throw new EimzoError('EIMZO_ERROR', { reason: 'invalid pkcs7_64 in response' });
+      }
+      return res.pkcs7_64;
+    };
     try {
       return await create(keyId);
     } catch (error) {

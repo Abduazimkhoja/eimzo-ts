@@ -34,25 +34,29 @@ export function createFetchBackend<TLogin = unknown>(options: FetchBackendOption
   const doFetch = options.fetch ?? ((input: RequestInfo | URL, init?: RequestInit) => fetch(input, init));
   const base = options.init ?? {};
 
-  const request = async (url: string, init: RequestInit): Promise<any> => {
+  const request = async (url: string, init: RequestInit): Promise<unknown> => {
+    const headers = new Headers(base.headers);
+    new Headers(init.headers).forEach((value, name) => headers.set(name, value));
     const response = await doFetch(url, {
       ...base,
       ...init,
-      headers: { ...headersToObject(base.headers), ...headersToObject(init.headers) },
+      headers,
     });
     const text = await response.text();
-    let body: any = text;
+    let body: unknown;
     try {
-      body = text ? JSON.parse(text) : null;
-    } catch {
-      // не JSON — вернём текст
+      body = JSON.parse(text);
+    } catch (cause) {
+      if (response.ok) {
+        throw new EimzoError('BACKEND_ERROR', { detail: 'invalid JSON response' }, { httpStatus: response.status, cause });
+      }
     }
+    const message = body && typeof body === 'object' && 'message' in body && body.message ? String(body.message) : undefined;
     if (!response.ok) {
-      const detail = body && typeof body === 'object' && body.message ? String(body.message) : undefined;
-      throw new EimzoError('BACKEND_ERROR', { status: response.status, detail }, { httpStatus: response.status });
+      throw new EimzoError('BACKEND_ERROR', { status: response.status, detail: message }, { httpStatus: response.status });
     }
     if (body && typeof body === 'object' && 'status' in body && body.status !== 1) {
-      const detail = body.message ? String(body.message) : `status ${body.status}`;
+      const detail = message ?? `status ${body.status}`;
       throw new EimzoError('BACKEND_ERROR', { status: response.status, detail }, { httpStatus: response.status });
     }
     return body;
@@ -66,7 +70,7 @@ export function createFetchBackend<TLogin = unknown>(options: FetchBackendOption
     const url = options.challengeUrl;
     backend.getChallenge = async () => {
       const body = await request(url, { method: 'GET', cache: 'no-store' });
-      if (!body || typeof body.challenge !== 'string') {
+      if (!body || typeof body !== 'object' || !('challenge' in body) || typeof body.challenge !== 'string') {
         throw new EimzoError('BACKEND_ERROR', { detail: 'no "challenge" field in response' });
       }
       return body.challenge;
@@ -74,28 +78,17 @@ export function createFetchBackend<TLogin = unknown>(options: FetchBackendOption
   }
   if (options.loginUrl) {
     const url = options.loginUrl;
-    backend.login = (pkcs7) => postPkcs7(url, pkcs7);
+    backend.login = async (pkcs7) => (await postPkcs7(url, pkcs7)) as TLogin;
   }
   if (options.timestampUrl) {
     const url = options.timestampUrl;
     backend.timestamp = async (pkcs7) => {
       const body = await postPkcs7(url, pkcs7);
-      if (!body || typeof body.pkcs7b64 !== 'string') {
+      if (!body || typeof body !== 'object' || !('pkcs7b64' in body) || typeof body.pkcs7b64 !== 'string') {
         throw new EimzoError('BACKEND_ERROR', { detail: 'no "pkcs7b64" field in response' });
       }
       return body.pkcs7b64;
     };
   }
   return backend;
-}
-
-function headersToObject(headers: HeadersInit | undefined): Record<string, string> {
-  if (!headers) return {};
-  if (typeof Headers !== 'undefined' && headers instanceof Headers) {
-    const result: Record<string, string> = {};
-    headers.forEach((value, key) => (result[key] = value));
-    return result;
-  }
-  if (Array.isArray(headers)) return Object.fromEntries(headers);
-  return headers as Record<string, string>;
 }

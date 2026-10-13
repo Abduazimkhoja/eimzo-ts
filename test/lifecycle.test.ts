@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createEimzo, type EimzoRequest, type PfxKey } from '../src';
+import { createEimzo, EimzoError, type EimzoRequest, type PfxKey, type TokenKey } from '../src';
 import { fakeTransport, PFX_ALIAS, VERSION_486 } from './helpers';
 
 const key = { type: 'pfx', disk: 'C:\\', path: 'DSKEYS', name: 'key1', alias: PFX_ALIAS } as PfxKey;
@@ -44,6 +44,73 @@ describe('устаревший keyId', () => {
 });
 
 describe('unloadKey / смена ключа', () => {
+  it.each(['pfx', 'ftjc'] as const)('успешная проверка %s сохраняет ключ для подписи', async (type) => {
+    const { transport, calls } = fakeTransport({
+      version: VERSION_486,
+      [`${type}.load_key`]: { success: true, keyId: 'K1' },
+      [`${type}.${type === 'pfx' ? 'verify_password' : 'verify_pin'}`]: { success: true },
+      'pkcs7.create_pkcs7': { success: true, pkcs7_64: 'SIGNED' },
+    });
+    const eimzo = createEimzo({ transport });
+    const selected = type === 'pfx' ? key : { type: 'ftjc', cardUID: 'TEST' } as TokenKey;
+    await expect(eimzo.loadKey(selected, { verifyPassword: true })).resolves.toBe('K1');
+    expect(calls.find((c) => c.name.startsWith('verify_'))?.arguments).toEqual(type === 'pfx' ? ['K1'] : ['K1', '1']);
+    await expect(eimzo.sign('x')).resolves.toBe('SIGNED');
+    expect(signCalls(calls)[0].arguments?.[1]).toBe('K1');
+  });
+
+  it('после сбоя выгрузки сохраняет keyId для повторной очистки', async () => {
+    let attempts = 0;
+    const { transport, calls } = fakeTransport({
+      version: VERSION_486,
+      'pfx.load_key': { success: true, keyId: 'K1' },
+      'pfx.unload_key': () => {
+        if (++attempts === 1) throw new EimzoError('TIMEOUT');
+        return { success: true };
+      },
+    });
+    const eimzo = createEimzo({ transport });
+    await eimzo.loadKey(key);
+    await expect(eimzo.unloadKey()).rejects.toMatchObject({ code: 'TIMEOUT' });
+    expect(eimzo.keyId).toBe('K1');
+    await eimzo.unloadKey();
+    expect(calls.filter((c) => c.name === 'unload_key').map((c) => c.arguments)).toEqual([['K1'], ['K1']]);
+    expect(eimzo.keyId).toBeNull();
+  });
+
+  it.each([false, true])('отмена проверки пароля очищает ключ; сбой очистки: %s', async (cleanupFails) => {
+    let attempts = 0;
+    const { transport, calls } = fakeTransport({
+      version: VERSION_486,
+      'pfx.load_key': { success: true, keyId: 'K1' },
+      'pfx.verify_password': { success: false, status: -5000, reason: 'Ввод пароля отменен' },
+      'pfx.unload_key': () => {
+        if (++attempts === 1 && cleanupFails) throw new EimzoError('TIMEOUT');
+        return { success: true };
+      },
+    });
+    const eimzo = createEimzo({ transport });
+    await expect(eimzo.loadKey(key, { verifyPassword: true })).rejects.toMatchObject({
+      code: cleanupFails ? 'TIMEOUT' : 'CANCELLED',
+    });
+    expect(calls.find((c) => c.name === 'unload_key')?.arguments).toEqual(['K1']);
+    expect(eimzo.keyId).toBe(cleanupFails ? 'K1' : null);
+    await eimzo.unloadKey();
+    expect(eimzo.keyId).toBeNull();
+  });
+
+  it.each([undefined, '', 42])('отклоняет некорректный keyId: %s', async (keyId) => {
+    const { transport } = fakeTransport({ version: VERSION_486, 'pfx.load_key': { success: true, keyId } });
+    const eimzo = createEimzo({ transport });
+    await expect(eimzo.loadKey(key)).rejects.toMatchObject({ code: 'EIMZO_ERROR' });
+    expect(eimzo.keyId).toBeNull();
+  });
+
+  it.each([undefined, '', 42])('отклоняет некорректную подпись: %s', async (pkcs7_64) => {
+    const { transport } = fakeTransport({ version: VERSION_486, 'pkcs7.create_pkcs7': { success: true, pkcs7_64 } });
+    await expect(createEimzo({ transport }).sign('x', { keyId: 'K1' })).rejects.toMatchObject({ code: 'EIMZO_ERROR' });
+  });
+
   it('unloadKey выгружает PFX из E-IMZO и забывает keyId', async () => {
     const { transport, calls } = fakeTransport({
       version: VERSION_486,

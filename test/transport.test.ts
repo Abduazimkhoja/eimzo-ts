@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createCapiwsTransport, createFetchBackend, createWebSocketTransport } from '../src';
+import { createCapiwsTransport, createDefaultTransport, createFetchBackend, createWebSocketTransport, type CapiwsLike } from '../src';
 
 type Behavior = { reply?: unknown; closeCode?: number; silent?: boolean };
 
@@ -27,6 +27,21 @@ function fakeWebSocket(behavior: Behavior) {
 }
 
 describe('createWebSocketTransport', () => {
+  it.each(['serialize', 'send'])('ошибка %s отклоняет запрос и закрывает соединение', async (stage) => {
+    let socket!: FakeWS;
+    class FakeWS {
+      onopen: (() => void) | null = null;
+      constructor() { socket = this; }
+      send() { throw new Error('send failed'); }
+      close = vi.fn();
+    }
+    const transport = createWebSocketTransport({ WebSocketImpl: FakeWS as unknown as typeof WebSocket });
+    const result = transport({ name: 'custom', arguments: stage === 'serialize' ? [1n] : [] });
+    expect(() => socket.onopen?.()).not.toThrow();
+    await expect(result).rejects.toMatchObject({ code: 'EIMZO_ERROR' });
+    expect(socket.close).toHaveBeenCalledOnce();
+  });
+
   it('отправляет запрос и возвращает ответ', async () => {
     const { WS, sent } = fakeWebSocket({ reply: { success: true, major: '4', minor: '86' } });
     const transport = createWebSocketTransport({ WebSocketImpl: WS, url: 'ws://test' });
@@ -48,6 +63,48 @@ describe('createWebSocketTransport', () => {
 });
 
 describe('createCapiwsTransport', () => {
+  it.each(['success', 'error', 'throw'])('очищает таймер после %s', async (outcome) => {
+    vi.useFakeTimers();
+    const cause = new Error('extension failed');
+    const capiws: CapiwsLike = {
+      version: (ok, fail) => {
+        if (outcome === 'throw') throw cause;
+        if (outcome === 'error') fail(1006);
+        else ok(null, { success: true });
+      },
+      apikey: vi.fn(),
+      callFunction: vi.fn(),
+    };
+    try {
+      const result = createCapiwsTransport(capiws, { timeoutMs: 100 })({ name: 'version' });
+      if (outcome === 'success') await expect(result).resolves.toEqual({ success: true });
+      else if (outcome === 'error') await expect(result).rejects.toMatchObject({ code: 'NOT_INSTALLED', wsCode: 1006 });
+      else await expect(result).rejects.toBe(cause);
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('default transport применяет timeoutMs к расширению и игнорирует поздний ответ', async () => {
+    vi.useFakeTimers();
+    let reply!: Parameters<CapiwsLike['version']>[0];
+    vi.stubGlobal('EIMZOEXT', {
+      version: (ok: typeof reply) => { reply = ok; },
+    });
+    try {
+      const result = createDefaultTransport({ timeoutMs: 10 })({ name: 'version' }).catch((e: unknown) => e);
+      await vi.advanceTimersByTimeAsync(10);
+      reply(null, { success: true });
+      const outcome = await Promise.race([result, Promise.resolve('pending')]);
+      expect(outcome).toMatchObject({ code: 'TIMEOUT' });
+      expect(vi.getTimerCount()).toBe(0);
+    } finally {
+      vi.unstubAllGlobals();
+      vi.useRealTimers();
+    }
+  });
+
   it('version/apikey идут в свои методы, остальное — в callFunction', async () => {
     const ok = (_d: unknown, cb: (e: unknown, d: unknown) => void) => cb(null, { success: true });
     const capiws = {
@@ -82,12 +139,38 @@ describe('createFetchBackend', () => {
     });
     expect(await backend.getChallenge!()).toBe('c1');
     expect(await backend.timestamp!('P')).toBe('TS');
-    expect(fetch.mock.calls[0][1]).toMatchObject({ cache: 'no-store', credentials: 'include', headers: { 'X-CSRF': 'tok' } });
+    expect(fetch.mock.calls[0][1]).toMatchObject({ cache: 'no-store', credentials: 'include' });
+    expect(new Headers(fetch.mock.calls[0][1].headers).get('X-CSRF')).toBe('tok');
     expect(fetch.mock.calls[1][1]).toMatchObject({
       method: 'POST',
       body: 'P',
-      headers: { 'X-CSRF': 'tok', 'Content-Type': 'text/plain' },
     });
+    expect(new Headers(fetch.mock.calls[1][1].headers).get('Content-Type')).toBe('text/plain');
+    expect(new Headers(fetch.mock.calls[1][1].headers).get('X-CSRF')).toBe('tok');
+  });
+
+  it.each<{ headers: HeadersInit }>([
+    { headers: { 'content-type': 'application/json' } },
+    { headers: [['content-type', 'application/json']] },
+    { headers: new Headers({ 'content-type': 'application/json' }) },
+  ])('переопределяет Content-Type без дублирования: %s', async ({ headers }) => {
+    const fetch = respond({ token: 'test' });
+    await createFetchBackend({ loginUrl: '/l', init: { headers }, fetch }).login!('P');
+    expect(new Headers(fetch.mock.calls[0][1].headers).get('content-type')).toBe('text/plain');
+  });
+
+  it.each(['<html>proxy fallback</html>', ''])('не принимает не-JSON за успешный вход: %s', async (body) => {
+    const backend = createFetchBackend({ loginUrl: '/l', fetch: vi.fn().mockResolvedValue(new Response(body)) });
+    await expect(backend.login!('P')).rejects.toMatchObject({ code: 'BACKEND_ERROR', httpStatus: 200 });
+  });
+
+  it('сохраняет HTTP-статус ошибки с HTML вместо JSON', async () => {
+    const backend = createFetchBackend({ loginUrl: '/l', fetch: vi.fn().mockResolvedValue(new Response('<html>error</html>', { status: 502 })) });
+    await expect(backend.login!('P')).rejects.toMatchObject({ code: 'BACKEND_ERROR', httpStatus: 502 });
+  });
+
+  it('возвращает JSON приложения без изменения', async () => {
+    await expect(createFetchBackend({ loginUrl: '/l', fetch: respond({ token: 'test' }) }).login!('P')).resolves.toEqual({ token: 'test' });
   });
 
   it('HTTP-ошибка и status != 1 — BACKEND_ERROR', async () => {
