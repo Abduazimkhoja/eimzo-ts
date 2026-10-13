@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>eimzo-client demo</title>
+  <title>eimzo-ts demo</title>
   <style>
     body { font: 15px/1.5 system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 16px; color: #1d2433; }
     h1 { font-size: 1.4rem; }
@@ -22,11 +22,19 @@
     .kv pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
     .note { font-size: .9rem; color: #6a5a00; background: #fff8db; padding: .5rem .7rem; border-radius: 6px; }
     .error { color: #9b1c1c; }
+    .modes { display: flex; gap: 1rem; flex-wrap: wrap; }
     .tree { font-size: 12px; overflow-x: auto; background: #f6f8fa; padding: .6rem; }
   </style>
 </head>
 <body>
-  <h1>eimzo-client — проверка с E-IMZO</h1>
+  <h1>eimzo-ts — демо</h1>
+  <p>TypeScript-клиент для E-IMZO: <a href="https://github.com/abduazimkhuja/eimzo-ts">GitHub</a> · <a href="https://www.npmjs.com/package/eimzo-ts">npm</a></p>
+
+  <section class="modes" role="radiogroup" aria-label="Режим">
+    <label><input type="radio" name="mode" value="real"> Настоящий E-IMZO на этом компьютере</label>
+    <label><input type="radio" name="mode" value="mock"> Демо без E-IMZO (вымышленные ключи)</label>
+  </section>
+  <p id="modeNote" class="note" hidden></p>
   <p id="status">Подключение к E-IMZO…</p>
 
   <section>
@@ -54,17 +62,39 @@
   <!-- Сначала соберите пакет: npm run build -->
   <script src="../dist/index.global.js"></script>
   <script src="pkcs7-viewer.js"></script>
+  <script src="mock-eimzo.js"></script>
   <script>
     const { createEimzo, DEV_API_KEYS } = EimzoClient;
-    const eimzo = createEimzo({ apiKeys: DEV_API_KEYS });
     const $ = (id) => document.getElementById(id);
+
+    // Режим: ?mode=real|mock; по умолчанию настоящий E-IMZO только на localhost.
+    const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
+    const mode = new URLSearchParams(location.search).get('mode') || (isLocal ? 'real' : 'mock');
+    document.querySelectorAll('input[name=mode]').forEach((r) => {
+      r.checked = r.value === mode;
+      r.onchange = () => { location.search = `?mode=${r.value}`; };
+    });
+    if (mode === 'mock') {
+      $('modeNote').textContent = 'Демо-режим: E-IMZO не используется, ключи вымышленные, подпись ненастоящая (случайные байты вместо подписи).';
+      $('modeNote').hidden = false;
+    } else if (!isLocal) {
+      $('modeNote').textContent = 'Для этого домена нет API-KEY: включите «Режим разработчика» в меню E-IMZO в трее.';
+      $('modeNote').hidden = false;
+    }
+
+    const eimzo = createEimzo(mode === 'mock' ? { transport: createMockTransport() } : { apiKeys: DEV_API_KEYS });
     let keys = [];
 
     const status = (text, isError) => {
       $('status').textContent = text;
       $('status').className = isError ? 'error' : '';
     };
-    const fail = (e) => status(`[${e.code || 'ERROR'}] ${e.message}`, true);
+    const fail = (e) => {
+      status(`[${e.code || 'ERROR'}] ${e.message}`, true);
+      if (e.code === 'NOT_INSTALLED' && mode === 'real') {
+        $('status').append(' ', Object.assign(document.createElement('a'), { href: '?mode=mock', textContent: 'Открыть демо без E-IMZO' }));
+      }
+    };
 
     async function start() {
       try {
