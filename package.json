@@ -1,6 +1,6 @@
 {
   "name": "eimzo-ts",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Unofficial framework-agnostic TypeScript client for E-IMZO (Uzbekistan digital signature): key listing, PKCS#7 signing, login by EDS.",
   "license": "MIT",
   "author": "Abduazimkhoja",
