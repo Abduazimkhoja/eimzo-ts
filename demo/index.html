@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>eimzo-client demo</title>
+  <style>
+    body { font: 15px/1.5 system-ui, sans-serif; max-width: 760px; margin: 2rem auto; padding: 0 16px; color: #1d2433; }
+    h1 { font-size: 1.4rem; }
+    section { border: 1px solid #d8dde6; border-radius: 8px; padding: 1rem; margin: 1rem 0; }
+    select, textarea, button { font: inherit; }
+    select, textarea { width: 100%; box-sizing: border-box; }
+    textarea { min-height: 5rem; }
+    button { padding: .4rem .9rem; margin-top: .5rem; cursor: pointer; }
+    #status { padding: .6rem .8rem; border-radius: 6px; background: #eef2f7; }
+    #status.error { background: #fdecec; color: #9b1c1c; }
+    #pkcs7 { font-family: ui-monospace, monospace; font-size: 12px; min-height: 7rem; }
+    h3 { font-size: 1rem; margin: 1.2rem 0 .4rem; }
+    .kv { border-collapse: collapse; width: 100%; }
+    .kv th, .kv td { text-align: left; vertical-align: top; padding: .3rem .5rem; border-bottom: 1px solid #e6e9ef; }
+    .kv th { width: 38%; font-weight: 500; color: #5b6475; }
+    .kv pre { margin: 0; white-space: pre-wrap; word-break: break-word; }
+    .note { font-size: .9rem; color: #6a5a00; background: #fff8db; padding: .5rem .7rem; border-radius: 6px; }
+    .error { color: #9b1c1c; }
+    .tree { font-size: 12px; overflow-x: auto; background: #f6f8fa; padding: .6rem; }
+  </style>
+</head>
+<body>
+  <h1>eimzo-client — проверка с E-IMZO</h1>
+  <p id="status">Подключение к E-IMZO…</p>
+
+  <section>
+    <label for="keys"><strong>Ключ</strong></label>
+    <select id="keys" disabled></select>
+    <p id="devices"></p>
+    <button id="load" disabled>Загрузить ключ</button>
+    <span id="keyId"></span>
+  </section>
+
+  <section>
+    <label for="data"><strong>Текст для подписи</strong></label>
+    <textarea id="data">Тестовый документ</textarea>
+    <label><input type="checkbox" id="detached"> detached</label><br>
+    <button id="sign" disabled>Подписать</button>
+  </section>
+
+  <section>
+    <label for="pkcs7"><strong>PKCS#7 (base64)</strong> — результат подписи, или вставьте любой свой</label>
+    <textarea id="pkcs7" spellcheck="false" placeholder="MIAGCSqG..."></textarea>
+    <button id="inspect">Посмотреть содержимое</button>
+    <div id="inspectResult"></div>
+  </section>
+
+  <!-- Сначала соберите пакет: npm run build -->
+  <script src="../dist/index.global.js"></script>
+  <script src="pkcs7-viewer.js"></script>
+  <script>
+    const { createEimzo, DEV_API_KEYS } = EimzoClient;
+    const eimzo = createEimzo({ apiKeys: DEV_API_KEYS });
+    const $ = (id) => document.getElementById(id);
+    let keys = [];
+
+    const status = (text, isError) => {
+      $('status').textContent = text;
+      $('status').className = isError ? 'error' : '';
+    };
+    const fail = (e) => status(`[${e.code || 'ERROR'}] ${e.message}`, true);
+
+    async function start() {
+      try {
+        const v = await eimzo.init();
+        status(`E-IMZO ${v.major}.${v.minor} подключён.`);
+
+        keys = await eimzo.listKeys();
+        $('keys').replaceChildren(...keys.map((k, i) => {
+          const o = new Option(`${k.CN} — ${k.TIN || k.PINFL}${k.expired ? ' (срок истёк)' : ''}`, String(i));
+          o.disabled = k.expired;
+          return o;
+        }));
+        $('keys').disabled = $('load').disabled = keys.length === 0;
+        if (keys.length === 0) status('Ключи PFX не найдены.');
+
+        const d = await eimzo.listDevices();
+        $('devices').textContent = `ID-карта: ${d.idcard ? 'да' : 'нет'}, BAIK: ${d.baikey ? 'да' : 'нет'}, CKC: ${d.ckc ? 'да' : 'нет'}`;
+      } catch (e) { fail(e); }
+    }
+
+    $('load').onclick = async () => {
+      try {
+        const id = await eimzo.loadKey(keys[$('keys').value]);
+        $('keyId').textContent = `keyId: ${id}`;
+        $('sign').disabled = false;
+        status('Ключ загружен. Пароль спросит E-IMZO при подписи.');
+      } catch (e) { fail(e); }
+    };
+
+    $('sign').onclick = async () => {
+      try {
+        status('Подписание… введите пароль в окне E-IMZO.');
+        $('pkcs7').value = await eimzo.sign($('data').value, { detached: $('detached').checked });
+        $('inspectResult').replaceChildren();
+        status('Готово. Повторная подпись тем же ключом — без пароля, если отмечено «Запомнить на 6 час.».');
+      } catch (e) { fail(e); }
+    };
+
+    // ---- Просмотр PKCS#7 ----
+
+    const el = (tag, text, attrs) => {
+      const node = document.createElement(tag);
+      if (text !== undefined) node.textContent = text;
+      Object.assign(node, attrs);
+      return node;
+    };
+    const fmt = (d) => (d ? d.toLocaleString('ru-RU') : '—');
+    const table = (rows) => {
+      const t = el('table', undefined, { className: 'kv' });
+      rows.filter(([, v]) => v !== undefined && v !== '').forEach(([k, v]) => {
+        const tr = t.insertRow();
+        tr.append(el('th', k));
+        const td = tr.insertCell();
+        td.append(v instanceof Node ? v : document.createTextNode(String(v)));
+      });
+      return t;
+    };
+
+    $('inspect').onclick = () => {
+      const out = $('inspectResult');
+      out.replaceChildren();
+      let info;
+      try {
+        info = inspectPkcs7($('pkcs7').value);
+      } catch (e) {
+        out.append(el('p', `Не удалось разобрать PKCS#7: ${e.message}`, { className: 'error' }));
+        return;
+      }
+
+      out.append(el('p', 'Только просмотр: подпись здесь не проверяется. Доверять содержимому можно после проверки на e-imzo-server.', { className: 'note' }));
+
+      out.append(el('h3', 'Документ'));
+      let doc;
+      if (info.detached) {
+        doc = 'нет внутри (detached) — для проверки нужен исходный документ';
+      } else if (info.contentText !== null) {
+        doc = el('pre', info.contentText);
+      } else {
+        const a = el('a', `бинарные данные, ${info.content.length} байт — скачать`, {
+          href: URL.createObjectURL(new Blob([info.content])),
+          download: 'document.bin',
+        });
+        doc = a;
+      }
+      out.append(table([
+        ['Тип', info.detached ? 'detached' : 'attached'],
+        ['Размер PKCS#7', `${info.size} байт`],
+        ['Содержимое', doc],
+      ]));
+
+      info.signers.forEach((s, i) => {
+        const cert = info.certificates.find((c) => c.serialNumber === s.serialNumber) || {};
+        const subj = cert.subject || {};
+        out.append(el('h3', `Подписант ${i + 1}`));
+        out.append(table([
+          ['ФИО (CN)', subj.CN],
+          ['ПИНФЛ', subj.PINFL],
+          ['ИНН', subj.INN || subj.UID],
+          ['Организация', subj.O],
+          ['Должность', subj.T],
+          ['Серийный номер', s.serialNumber],
+          ['Выдан', cert.issuer && cert.issuer.CN],
+          ['Действует', cert.validFrom ? `${fmt(cert.validFrom)} — ${fmt(cert.validTo)}` : undefined],
+          ['Время подписи (часы ПК)', fmt(s.signingTime)],
+          ['Метка времени', s.hasTimestamp ? fmt(s.timestampTime) : 'нет'],
+        ]));
+      });
+
+      const details = el('details');
+      details.append(el('summary', 'Структура ASN.1'), el('pre', info.tree, { className: 'tree' }));
+      out.append(details);
+    };
+
+    start();
+  </script>
+</body>
+</html>
