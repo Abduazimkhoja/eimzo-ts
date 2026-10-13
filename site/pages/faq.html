@@ -1,0 +1,64 @@
+<!-- {"title": "eimzo-ts FAQ — E-IMZO integration questions", "description": "Answers about eimzo-ts and E-IMZO: what it does, when not to use it, HTTPS, API keys, passwords, SSR frameworks, testing without E-IMZO, alternatives and limitations.", "path": "faq/", "lang": "en", "type": "FAQPage"} -->
+    <h1>FAQ</h1>
+
+    <details open><summary>What is eimzo-ts?</summary>
+      <p>A browser library that connects a web page to the E-IMZO desktop application in Uzbekistan to list the
+        user's digital signature keys, create PKCS#7 signatures and log users in by digital signature. It is written in
+        TypeScript, has no runtime dependencies, and is not an official E-IMZO product.</p></details>
+
+    <details><summary>What problem does it solve?</summary>
+      <p>The official example (<code>e-imzo.js</code> and <code>e-imzo-client.js</code>) is callback-based, uses global
+        variables and modifies built-in prototypes. eimzo-ts offers the same E-IMZO calls as a typed Promise API with
+        typed error codes, localized messages, a signing queue and a login helper.</p></details>
+
+    <details><summary>When should I use it?</summary>
+      <p>When a web application must let users on desktop computers sign data, files or a login challenge with
+        E-IMZO.</p></details>
+
+    <details><summary>When should I not use it?</summary>
+      <p>To verify signatures (use e-imzo-server on your backend), for mobile signing with ID-CARD E-IMZO MOBILE (not
+        supported), when you need ready-made UI components (there are none), or for other signature providers.</p></details>
+
+    <details><summary>Does it verify signatures?</summary>
+      <p>No. It only creates them. Verification must happen on your server through e-imzo-server
+        (<code>/backend/auth</code>, <code>/backend/pkcs7/verify/attached</code>, <code>/backend/pkcs7/verify/detached</code>).</p></details>
+
+    <details><summary>Does it work with TypeScript, React, Angular, Vue, Next.js?</summary>
+      <p>It ships TypeScript declarations. It has no framework dependency, so any framework can call it. With
+        server-side rendering (Next.js, Nuxt, Angular SSR) call it only in client-side code. It does not provide
+        framework-specific components or hooks.</p></details>
+
+    <details><summary>Does it work in Node.js?</summary>
+      <p>It is meant for browsers. A Node.js script can talk to E-IMZO on the same computer if you pass a
+        <code>WebSocketImpl</code> that sends an <code>Origin</code> header; the repository's
+        <code>scripts/check-real-eimzo.mjs</code> does this. It cannot reach E-IMZO on a user's computer from your server.</p></details>
+
+    <details><summary>Does it work on HTTPS sites?</summary>
+      <p>Yes. On https pages it connects to <code>wss://127.0.0.1:64443</code>, on http pages to
+        <code>ws://127.0.0.1:64646</code>.</p></details>
+
+    <details><summary>Do I need an API key?</summary>
+      <p>For <code>localhost</code> and <code>127.0.0.1</code> use <code>DEV_API_KEYS</code>. For other domains during
+        development, enable Developer mode in the E-IMZO tray menu. For production, each domain and subdomain needs its
+        own API key.</p></details>
+
+    <details><summary>Does my site see the key password?</summary>
+      <p>No. E-IMZO asks for it in its own window. Without "Remember for 6 hours" E-IMZO keeps it for 1 minute for the
+        loaded key. <code>unloadKey()</code> removes the key and the remembered password.</p></details>
+
+    <details><summary>How do I test without E-IMZO?</summary>
+      <p>Pass a <code>transport</code> function to <code>createEimzo</code> that returns fake E-IMZO responses. The
+        <a href="../demo/">demo</a> includes a full mock with fake keys.</p></details>
+
+    <details><summary>Is signingTime reliable?</summary>
+      <p>No. It is the user's computer clock. Add a timestamp with <code>signDocument()</code> and check it on the
+        server.</p></details>
+
+    <details><summary>What alternatives exist?</summary>
+      <p>The official <code>e-imzo.js</code> example, and several npm packages: framework-specific wrappers for Vue or
+        React, UI components, other framework-agnostic clients, and server-side clients for e-imzo-server. Search npm
+        for "e-imzo" and compare. eimzo-ts has not benchmarked or audited them.</p></details>
+
+    <details><summary>What are the limitations?</summary>
+      <p>Desktop only, no signature verification, no UI. Uzbek and Karakalpak message texts have not yet been
+        reviewed by native speakers; you can override any text with <code>messages</code>.</p></details>

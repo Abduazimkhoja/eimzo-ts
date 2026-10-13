@@ -1,0 +1,72 @@
+<!-- {"title": "Login with E-IMZO digital signature in a web app — eimzo-ts", "description": "How to implement login by E-IMZO digital signature: one-time challenge, signing in the browser with eimzo-ts, and verification with e-imzo-server /backend/auth.", "path": "login/", "lang": "en", "type": "TechArticle"} -->
+    <h1>Login with an E-IMZO digital signature</h1>
+    <p class="lead">The user signs a one-time challenge with their key; your server verifies the signature and
+      finds the user by PINFL or TIN.</p>
+
+    <h2>Flow</h2>
+    <ol>
+      <li>The browser asks your backend for a challenge. The backend gets it from e-imzo-server
+        (<code>GET /frontend/challenge</code>, valid for 120 seconds).</li>
+      <li><code>eimzo-ts</code> loads the selected key and signs the challenge. E-IMZO asks for the password.</li>
+      <li>The browser posts the PKCS#7 to your backend. The backend calls <code>POST /backend/auth</code> on
+        e-imzo-server, which checks the signature, the certificate and the challenge.</li>
+      <li>The backend finds the user by PINFL (OID <code>1.2.860.3.16.1.2</code>) or TIN
+        (<code>1.2.860.3.16.1.1</code>, or <code>UID</code>) and opens a session.</li>
+    </ol>
+
+    <h2>Frontend</h2>
+<pre><code>import { createEimzo, createFetchBackend, DEV_API_KEYS, isEimzoError } from 'eimzo-ts';
+
+export const eimzo = createEimzo({
+  apiKeys: { ...DEV_API_KEYS },
+  backend: createFetchBackend({
+    challengeUrl: '/api/eimzo/challenge',
+    loginUrl: '/api/eimzo/login',
+    init: { credentials: 'include' },
+  }),
+});
+
+const keys = (await eimzo.listKeys()).filter((k) =&gt; !k.expired);
+
+try {
+  const user = await eimzo.login(keys[0]); // returns what /api/eimzo/login returned
+} catch (e) {
+  if (!isEimzoError(e, 'CANCELLED')) alert(eimzo.t(e));
+}</code></pre>
+    <p>Create the client once per application: E-IMZO remembers the password per loaded key, and a new client
+      would load the key again.</p>
+
+    <h2>Backend endpoints</h2>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Your endpoint</th><th>Calls e-imzo-server</th><th>Returns</th></tr></thead>
+      <tbody>
+        <tr><td><code>GET /api/eimzo/challenge</code></td><td><code>GET /frontend/challenge</code></td><td><code>{"status":1,"challenge":"..."}</code>, not cached</td></tr>
+        <tr><td><code>POST /api/eimzo/login</code>, body: PKCS#7 as <code>text/plain</code></td><td><code>POST /backend/auth</code> with <code>X-Real-IP</code> and <code>Host</code></td><td>your user JSON</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p><code>X-Real-IP</code> is the user's IP from your trusted proxy; <code>Host</code> is your site's domain from
+      configuration. In Java, the built-in HTTP clients refuse to set <code>Host</code>: use Apache HttpClient 5 or
+      the JVM flags described in the
+      <a href="https://github.com/abduazimkhuja/eimzo-ts/blob/main/docs/backend.md">backend guide</a> (Russian, with a Spring Boot example).</p>
+
+    <h2><code>/backend/auth</code> statuses</h2>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>status</th><th>Meaning</th><th>Action</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>OK</td><td>Find the user, rotate the session ID</td></tr>
+        <tr><td>-1</td><td>Certificate status could not be checked (often the VPN is down)</td><td>503, retry later; do not log in</td></tr>
+        <tr><td>-5</td><td>Signing time outside the allowed window</td><td>Ask the user to check the computer clock</td></tr>
+        <tr><td>-10, -11, -12</td><td>Invalid signature or certificate</td><td>401</td></tr>
+        <tr><td>-20</td><td>Challenge not found or expired</td><td>Start login again</td></tr>
+        <tr><td>-24, -25</td><td>Certificate policy or CA not allowed</td><td>401</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h2>Logout</h2>
+<pre><code>await eimzo.unloadKey(); // removes the key and its remembered password from E-IMZO</code></pre>
+
+    <p>Next: <a href="../sign/">signing documents and files</a> · <a href="../troubleshooting/">troubleshooting</a></p>

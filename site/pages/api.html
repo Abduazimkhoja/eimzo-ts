@@ -1,0 +1,78 @@
+<!-- {"title": "eimzo-ts API reference — createEimzo, sign, login, errors", "description": "Complete API of eimzo-ts: createEimzo options, listKeys, loadKey, sign, signFile, login, signDocument, unloadKey, createFetchBackend and EimzoError codes.", "path": "api/", "lang": "en", "type": "TechArticle"} -->
+    <h1>API reference</h1>
+<pre><code>import { createEimzo, createFetchBackend, DEV_API_KEYS, isEimzoError } from 'eimzo-ts';
+import type { EimzoKey, EimzoOptions, EimzoBackend, EimzoErrorCode } from 'eimzo-ts';</code></pre>
+    <p>Without a bundler: <code>&lt;script src="https://unpkg.com/eimzo-ts@0.1/dist/index.global.js"&gt;&lt;/script&gt;</code>
+      exposes the same exports on <code>window.EimzoClient</code>.</p>
+
+    <h2 id="options"><code>createEimzo(options)</code></h2>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Option</th><th>Default</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>apiKeys</code></td><td>—</td><td><code>{ domain: key }</code> or <code>[domain, key, …]</code>. <code>DEV_API_KEYS</code> covers <code>localhost</code> and <code>127.0.0.1</code>. If omitted, the <code>apikey</code> call is skipped.</td></tr>
+        <tr><td><code>backend</code></td><td>—</td><td><code>{ getChallenge?, login?, timestamp? }</code> or <code>createFetchBackend(…)</code>.</td></tr>
+        <tr><td><code>minVersion</code></td><td><code>'4.86'</code></td><td>Older E-IMZO → <code>OUTDATED_VERSION</code>.</td></tr>
+        <tr><td><code>locale</code></td><td><code>'ru'</code></td><td><code>'ru'</code>, <code>'uz-Latn'</code>, <code>'uz-Cyrl'</code>, <code>'kaa'</code>, <code>'en'</code>, or a custom code with <code>messages</code>.</td></tr>
+        <tr><td><code>messages</code></td><td>—</td><td>Override or add texts: <code>{ en: { WRONG_PASSWORD: () =&gt; '…' } }</code>. Missing texts fall back to Russian.</td></tr>
+        <tr><td><code>autoReloadKey</code></td><td><code>true</code></td><td>When E-IMZO no longer knows the <code>keyId</code>, load the same key again and retry once.</td></tr>
+        <tr><td><code>timeoutMs</code></td><td>none</td><td>Timeout of one E-IMZO call. Signing waits for the user.</td></tr>
+        <tr><td><code>url</code>, <code>WebSocketImpl</code>, <code>transport</code></td><td>—</td><td>Custom WebSocket URL or implementation, or a <code>(request) =&gt; Promise&lt;response&gt;</code> function for tests.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h2 id="methods">Methods</h2>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Method</th><th>Returns</th><th>Description</th></tr></thead>
+      <tbody>
+        <tr><td><code>init()</code></td><td><code>{ major, minor }</code></td><td>Version check and API keys. Called automatically; cached.</td></tr>
+        <tr><td><code>getVersion()</code></td><td><code>{ major, minor }</code></td><td>Installed E-IMZO version.</td></tr>
+        <tr><td><code>listKeys()</code></td><td><code>EimzoKey[]</code></td><td><code>CN</code>, <code>TIN</code>, <code>PINFL</code>, <code>UID</code>, <code>O</code>, <code>T</code>, <code>serialNumber</code>, <code>validFrom</code>, <code>validTo</code>, <code>expired</code>. Keys without TIN and PINFL are skipped.</td></tr>
+        <tr><td><code>listDevices()</code></td><td><code>{ idcard, baikey, ckc }</code></td><td>Connected hardware devices.</td></tr>
+        <tr><td><code>loadKey(key, { verifyPassword })</code></td><td><code>keyId</code></td><td>Loads a key or <code>'idcard' | 'baikey' | 'ckc'</code>. Unloads the previous key.</td></tr>
+        <tr><td><code>sign(data, { detached, base64, keyId })</code></td><td>base64 PKCS#7</td><td><code>data</code>: <code>string</code> (UTF-8), <code>Uint8Array</code>, <code>ArrayBuffer</code>. Attached by default.</td></tr>
+        <tr><td><code>signFile(blob, { detached, maxSize, keyId })</code></td><td>base64 PKCS#7</td><td>Detached by default; 10 MB limit by default.</td></tr>
+        <tr><td><code>login(key)</code></td><td>backend result</td><td><code>getChallenge</code> → <code>loadKey</code> → <code>sign</code> → <code>backend.login</code>.</td></tr>
+        <tr><td><code>signDocument(data, options)</code></td><td>base64 PKCS#7</td><td><code>sign</code> → <code>backend.timestamp</code>.</td></tr>
+        <tr><td><code>unloadKey()</code></td><td>—</td><td>Removes the key from E-IMZO. Call on logout.</td></tr>
+        <tr><td><code>call(plugin, name, args)</code></td><td>raw response</td><td>Any E-IMZO function.</td></tr>
+        <tr><td><code>keyId</code>, <code>locale</code>, <code>setLocale()</code>, <code>t(error)</code></td><td></td><td>Current key; error message language.</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p><code>loadKey</code>, <code>unloadKey</code>, <code>sign</code>, <code>signFile</code>, <code>login</code> and
+      <code>signDocument</code> run one at a time.</p>
+
+    <h2 id="backend"><code>createFetchBackend(options)</code></h2>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Option</th><th>Request</th><th>Expected response</th></tr></thead>
+      <tbody>
+        <tr><td><code>challengeUrl</code></td><td><code>GET</code>, not cached</td><td><code>{"status":1,"challenge":"..."}</code></td></tr>
+        <tr><td><code>loginUrl</code></td><td><code>POST</code>, PKCS#7 as <code>text/plain</code></td><td>any; returned from <code>login()</code></td></tr>
+        <tr><td><code>timestampUrl</code></td><td><code>POST</code>, PKCS#7 as <code>text/plain</code></td><td><code>{"status":1,"pkcs7b64":"..."}</code></td></tr>
+        <tr><td><code>init</code></td><td colspan="2">Merged into every request: headers, <code>credentials</code>.</td></tr>
+        <tr><td><code>fetch</code></td><td colspan="2">Custom <code>fetch</code> implementation.</td></tr>
+      </tbody>
+    </table>
+    </div>
+    <p>A non-2xx response or <code>status</code> other than 1 → <code>BACKEND_ERROR</code>.</p>
+
+    <h2 id="errors">Errors</h2>
+    <p>Every error is an <code>EimzoError</code>: <code>code</code>, <code>params</code>, localized <code>message</code>,
+      E-IMZO's <code>reason</code> and <code>status</code>, WebSocket <code>wsCode</code>, backend <code>httpStatus</code>.
+      Check with <code>isEimzoError(e, 'CODE')</code>.</p>
+    <p>Codes: <code>NOT_INSTALLED</code>, <code>WEBSOCKET_UNSUPPORTED</code>, <code>TIMEOUT</code>,
+      <code>OUTDATED_VERSION</code>, <code>API_KEY_REJECTED</code>, <code>WRONG_PASSWORD</code>, <code>CANCELLED</code>,
+      <code>KEY_NOT_FOUND</code>, <code>FILE_TOO_LARGE</code>, <code>KEY_NOT_LOADED</code>,
+      <code>BACKEND_NOT_CONFIGURED</code>, <code>BACKEND_ERROR</code>, <code>EIMZO_ERROR</code>.
+      What each one means: <a href="../troubleshooting/">troubleshooting</a>.</p>
+
+    <h2 id="other">Other exports</h2>
+    <p><code>formatEimzoError(error, locale, overrides)</code>, <code>parseX500</code>, <code>parseCertificateInfo</code>,
+      <code>createWebSocketTransport</code>, <code>createCapiwsTransport</code>, <code>createDefaultTransport</code>,
+      <code>defaultEimzoUrl</code>, <code>DEFAULT_MAX_FILE_SIZE</code>, locale objects <code>ru</code>,
+      <code>uzLatn</code>, <code>uzCyrl</code>, <code>kaa</code>, <code>en</code>, <code>builtinMessages</code>,
+      <code>DEFAULT_LOCALE</code>.</p>

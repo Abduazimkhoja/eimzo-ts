@@ -5,6 +5,13 @@
 
 ## [Unreleased]
 
+## [0.1.3]
+
+### Документация
+
+- README на английском (русский — `README.ru.md`), сайт документации с примерами, FAQ и разбором ошибок.
+- `llms.txt`, `llms-full.txt`, `AGENTS.md`, Agent Skill `skills/eimzo-ts/` (входит в npm-пакет), `AI_INTEGRATION.md`.
+
 ## [0.1.2]
 
 ### Исправлено
@@ -35,7 +42,8 @@
 - Сборки ESM, CJS и IIFE (`EimzoClient`) с типами.
 - Демо с режимом без E-IMZO и просмотром содержимого PKCS#7.
 
-[Unreleased]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.1.2...HEAD
+[Unreleased]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.1.3...HEAD
+[0.1.3]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.1.1...v0.1.2
 [0.1.1]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/abduazimkhuja/eimzo-ts/releases/tag/v0.1.0

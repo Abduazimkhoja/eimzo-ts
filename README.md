@@ -1,93 +1,100 @@
-# eimzo-ts
+# eimzo-ts — TypeScript client for E-IMZO
 
 [![npm](https://img.shields.io/npm/v/eimzo-ts)](https://www.npmjs.com/package/eimzo-ts)
 [![CI](https://github.com/abduazimkhuja/eimzo-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/abduazimkhuja/eimzo-ts/actions/workflows/ci.yml)
 [![license](https://img.shields.io/npm/l/eimzo-ts)](LICENSE)
 
-TypeScript-клиент для [E-IMZO](https://e-imzo.uz): список ключей ЭЦП, подпись PKCS#7, вход по ЭЦП.
-Без зависимостей и без привязки к фреймворку: Angular, React, Vue, Svelte или обычная страница.
+**English** · [Русский](README.ru.md)
 
-Заменяет `e-imzo.js` и `e-imzo-client.js` из официального примера. Вызовы E-IMZO те же, но
-на Promise, с типами, без глобальных переменных и без правок `String.prototype`/`Date.prototype`.
+`eimzo-ts` lets a web page talk to [E-IMZO](https://e-imzo.uz), the desktop application used in
+Uzbekistan for electronic digital signatures (ЭЦП / ERI). With it you can list the user's signing keys,
+create PKCS#7 (CMS) signatures, and log users in with their digital signature.
 
-> **Неофициальная библиотека.** Не связана с разработчиками E-IMZO.
+It replaces `e-imzo.js` and `e-imzo-client.js` from the official E-IMZO example with a typed,
+Promise-based API: no global variables, no changes to `String.prototype` or `Date.prototype`,
+zero runtime dependencies.
 
-**[Демо](https://abduazimkhuja.github.io/eimzo-ts/)** работает и без E-IMZO, на вымышленных ключах.
+> **Unofficial.** This project is not affiliated with the developers of E-IMZO.
 
-Только для ПК: подпись выполняет приложение E-IMZO на компьютере пользователя. Мобильный
-вход (ID-CARD E-IMZO MOBILE) пока не поддерживается.
+[Documentation](https://abduazimkhuja.github.io/eimzo-ts/) ·
+[Live demo](https://abduazimkhuja.github.io/eimzo-ts/demo/) (works without E-IMZO, using mock keys) ·
+[npm](https://www.npmjs.com/package/eimzo-ts) ·
+[Changelog](CHANGELOG.md)
 
-## Установка
+## Use cases
+
+- **Login with a digital signature.** Get a one-time challenge from your backend, sign it with the user's key,
+  and send the signature to your backend for verification.
+- **Sign a document or form** (attached or detached PKCS#7), optionally with a trusted timestamp.
+- **Sign a file** picked with `<input type="file">`.
+- **Show the user's keys:** owner name, TIN (INN), PINFL, organization, validity, and an `expired` flag.
+- **Migrate from `e-imzo.js` / `e-imzo-client.js`** callbacks to `async`/`await` ([migration guide](docs/migration.md), in Russian).
+
+## How it works
+
+```
+your page (eimzo-ts) ──WebSocket──► E-IMZO on the user's PC   (asks for the key password)
+        │
+        └── fetch ──► your backend ──► e-imzo-server            (verifies the signature)
+```
+
+The library runs in the **browser**. It connects to E-IMZO at `ws://127.0.0.1:64646` (pages served over
+http) or `wss://127.0.0.1:64443` (https). If the `EIMZOEXT` browser extension object is present on the
+page, it is used instead. The password is typed into E-IMZO's own window; your page never sees it.
+
+Signatures are **verified on the server** by e-imzo-server, not by this library.
+
+## Installation
 
 ```bash
 npm install eimzo-ts
 ```
 
-Без сборщика:
+Without a bundler, use the IIFE build. It exposes a global `EimzoClient`:
 
 ```html
-<script src="https://unpkg.com/eimzo-ts@0.1.2/dist/index.global.js"></script>
+<script src="https://unpkg.com/eimzo-ts@0.1/dist/index.global.js"></script>
 <script>
   const eimzo = EimzoClient.createEimzo({ apiKeys: EimzoClient.DEV_API_KEYS });
 </script>
 ```
 
-## Быстрый старт
+The package ships ESM, CommonJS, and IIFE builds with TypeScript declarations. It is side-effect free.
+
+## Quick start
 
 ```ts
 import { createEimzo, createFetchBackend, DEV_API_KEYS } from 'eimzo-ts';
 
 const eimzo = createEimzo({
-  apiKeys: { ...DEV_API_KEYS, 'my-site.uz': 'API-KEY от НИЦ НТ' },
+  apiKeys: { ...DEV_API_KEYS, 'my-site.uz': 'API key for my-site.uz' },
   backend: createFetchBackend({
     challengeUrl: '/api/eimzo/challenge',
     loginUrl: '/api/eimzo/login',
     timestampUrl: '/api/eimzo/timestamp',
-    init: { credentials: 'include' }, // заголовки, CSRF и т.п.
+    init: { credentials: 'include' }, // headers, CSRF token, etc.
   }),
 });
 
-const keys = await eimzo.listKeys();                // ключи пользователя
-const user = await eimzo.login(keys[0]);            // вход: пароль спросит окно E-IMZO
-const pkcs7 = await eimzo.signDocument('документ'); // подпись + метка времени
+const keys = await eimzo.listKeys();                 // the user's keys
+const user = await eimzo.login(keys[0]);             // E-IMZO asks for the password
+const pkcs7 = await eimzo.signDocument('document');  // signature + timestamp
 ```
 
-Создавайте **один** экземпляр на всё приложение: он хранит `keyId` загруженного ключа.
+Create **one** instance per application. It keeps the `keyId` of the loaded key, and E-IMZO remembers
+the password per `keyId`.
 
-## API
+### Sign without a backend
 
-| Метод | Что делает |
-|---|---|
-| `init()` | Проверяет версию E-IMZO и устанавливает API-ключи. Вызывается сам перед любой операцией. |
-| `getVersion()` | Версия установленного E-IMZO. |
-| `listKeys()` | Ключи (`EimzoKey`): `CN`, `TIN`, `PINFL`, `O`, `T`, `validFrom`, `validTo`, `expired`. |
-| `listDevices()` | Подключены ли ID-карта, BAIK-токен, CKC: `{ idcard, baikey, ckc }`. |
-| `loadKey(key \| 'idcard' \| 'baikey' \| 'ckc')` | Загружает ключ, запоминает `keyId`. Предыдущий ключ выгружается. |
-| `sign(data, { detached, base64, keyId })` | PKCS#7 в base64. `data` — строка, `Uint8Array` или `ArrayBuffer`. |
-| `signFile(file, { detached, maxSize })` | Подпись `File`/`Blob`. По умолчанию detached, не больше 10 МБ. |
-| `login(key)` | Вход: challenge → `loadKey` → подпись → `backend.login`. |
-| `signDocument(data, options)` | `sign` → `backend.timestamp`. |
-| `unloadKey()` | Выгружает ключ из E-IMZO. Вызывайте при выходе пользователя. |
-| `call(plugin, name, args)` | Любая функция E-IMZO, см. `http://127.0.0.1:64646/apidoc.html`. |
-| `setLocale(locale)`, `t(error)` | Язык сообщений об ошибках. |
+```ts
+const keys = await eimzo.listKeys();
+await eimzo.loadKey(keys.find((k) => !k.expired)!);
+const pkcs7 = await eimzo.sign('text to sign');             // attached PKCS#7, base64
+const detached = await eimzo.sign(bytes, { detached: true }); // Uint8Array or ArrayBuffer
+const filePkcs7 = await eimzo.signFile(input.files[0]);      // detached by default, max 10 MB
+```
 
-### Опции `createEimzo`
-
-| Опция | По умолчанию | |
-|---|---|---|
-| `apiKeys` | — | `{ домен: ключ }` или `[домен, ключ, ...]`. Для localhost — `DEV_API_KEYS`. |
-| `backend` | — | `createFetchBackend(...)` или свой объект, см. ниже. |
-| `minVersion` | `'4.86'` | Ниже — ошибка `OUTDATED_VERSION`. |
-| `locale` | `'ru'` | `'ru'`, `'uz-Latn'`, `'uz-Cyrl'`, `'kaa'`, `'en'` или свой код. |
-| `messages` | — | Свои тексты ошибок. |
-| `autoReloadKey` | `true` | Если E-IMZO забыл `keyId`, загрузить ключ заново и повторить подпись. |
-| `timeoutMs` | без ограничения | Таймаут вызова E-IMZO. |
-| `url`, `WebSocketImpl`, `transport` | | Для тестов и нестандартного окружения. |
-
-## Ошибки
-
-Все ошибки — `EimzoError`. Для логики используйте `code`, для показа — `message`
-(уже на языке `locale`) или `eimzo.t(error)`.
+### Handle errors
 
 ```ts
 import { isEimzoError } from 'eimzo-ts';
@@ -95,127 +102,173 @@ import { isEimzoError } from 'eimzo-ts';
 try {
   await eimzo.login(key);
 } catch (e) {
-  if (isEimzoError(e, 'CANCELLED')) return;       // пользователь закрыл окно
-  if (isEimzoError(e, 'NOT_INSTALLED')) showDownloadLink();
-  else showError(eimzo.t(e));
+  if (isEimzoError(e, 'CANCELLED')) return;             // the user closed the password window
+  if (isEimzoError(e, 'NOT_INSTALLED')) showInstallHint();
+  else showError(eimzo.t(e));                           // localized message
 }
 ```
 
-| `code` | Когда |
-|---|---|
-| `NOT_INSTALLED` | E-IMZO не установлен или не запущен. |
-| `OUTDATED_VERSION` | Версия ниже `minVersion`; в `params` — `installed` и `min`. |
-| `API_KEY_REJECTED` | Нет API-KEY для домена страницы. |
-| `WRONG_PASSWORD` | Неверный пароль ключа. |
-| `CANCELLED` | Пользователь закрыл окно пароля. |
-| `KEY_NOT_FOUND` | E-IMZO не знает `keyId` (прошло 24 часа, перезапуск E-IMZO). |
-| `KEY_NOT_LOADED` | `sign()` до `loadKey()` — ошибка в коде. |
-| `FILE_TOO_LARGE` | Файл больше `maxSize`. |
-| `BACKEND_NOT_CONFIGURED` | Нет нужного метода в `backend` — ошибка в коде. |
-| `BACKEND_ERROR` | Backend ответил ошибкой; `httpStatus`, `params.detail`. |
-| `EIMZO_ERROR` | Прочие ошибки E-IMZO; исходный текст в `reason`, код в `status`. |
-| `TIMEOUT`, `WEBSOCKET_UNSUPPORTED` | Редкие случаи. |
+## Features
 
-### Языки
+- Typed API for keys, signing, login, and timestamps; Promise-based.
+- PFX keys, ID card, BAIK token, and CKC devices (`listDevices`, `loadKey('idcard' | 'baikey' | 'ckc')`).
+- Typed `EimzoError` with a stable `code`. E-IMZO's raw `reason` and `status` are kept.
+- Error messages in Russian, Uzbek (Latin and Cyrillic), Karakalpak, and English; you can override any text.
+- Concurrent `sign()` calls are queued, so a double click does not open two password windows.
+- If E-IMZO has forgotten the `keyId` (24 hours passed, or E-IMZO restarted), the key is loaded again and
+  the signature is retried (`autoReloadKey`).
+- `unloadKey()` on logout removes the key and its remembered password from E-IMZO.
+- `createFetchBackend()` matches e-imzo-server's response format, so your backend can proxy it as-is.
+- Zero runtime dependencies; ESM, CJS, and IIFE builds; `.d.ts` included.
+
+Behaviour for cancel, wrong password, signing, and unloading was checked against E-IMZO 6.3.5.
+
+## API
+
+| Method | Description |
+|---|---|
+| `createEimzo(options)` | Creates a client. See options below. |
+| `init()` | Checks the E-IMZO version and installs API keys. Called automatically. |
+| `getVersion()` | Installed E-IMZO version, `{ major, minor }`. |
+| `listKeys()` | User keys as `EimzoKey[]`: `CN`, `TIN`, `PINFL`, `O`, `T`, `validFrom`, `validTo`, `expired`. Keys without TIN and PINFL are skipped. |
+| `listDevices()` | `{ idcard, baikey, ckc }` — which hardware devices are connected. |
+| `loadKey(key, { verifyPassword })` | Loads a key (or `'idcard' \| 'baikey' \| 'ckc'`) and stores its `keyId`. Unloads the previous key. |
+| `sign(data, { detached, base64, keyId })` | Returns a base64 PKCS#7. `data`: `string`, `Uint8Array`, or `ArrayBuffer`. |
+| `signFile(blob, { detached, maxSize, keyId })` | Signs a `File` or `Blob`. Detached by default, 10 MB limit. |
+| `login(key)` | Challenge → `loadKey` → sign → `backend.login`. Returns what `backend.login` returns. |
+| `signDocument(data, options)` | `sign` → `backend.timestamp`. |
+| `unloadKey()` | Unloads the key from E-IMZO. Call it on logout. |
+| `call(plugin, name, args)` | Calls any E-IMZO function (see `http://127.0.0.1:64646/apidoc.html`). |
+| `keyId`, `locale`, `setLocale(locale)`, `t(error)` | Current key and language of error messages. |
+
+Other exports: `createFetchBackend`, `EimzoError`, `isEimzoError`, `formatEimzoError`, `parseX500`,
+`parseCertificateInfo`, `createWebSocketTransport`, `createCapiwsTransport`, `createDefaultTransport`,
+`defaultEimzoUrl`, `DEV_API_KEYS`, `DEFAULT_MAX_FILE_SIZE`, the locale objects (`ru`, `uzLatn`, `uzCyrl`,
+`kaa`, `en`), and all types.
+
+### Options
+
+| Option | Default | Description |
+|---|---|---|
+| `apiKeys` | — | `{ domain: key }` or `[domain, key, ...]`. Use `DEV_API_KEYS` for `localhost` and `127.0.0.1`. If omitted, `apikey` is not called. |
+| `backend` | — | `createFetchBackend(...)` or your own `{ getChallenge, login, timestamp }`. |
+| `minVersion` | `'4.86'` | Older E-IMZO → `OUTDATED_VERSION`. |
+| `locale` | `'ru'` | `'ru'`, `'uz-Latn'`, `'uz-Cyrl'`, `'kaa'`, `'en'`, or your own code with `messages`. |
+| `messages` | — | Override texts: `{ en: { WRONG_PASSWORD: () => '...' } }`. Missing texts fall back to Russian. |
+| `autoReloadKey` | `true` | Reload the key and retry when E-IMZO no longer knows the `keyId`. |
+| `timeoutMs` | none | Timeout of one E-IMZO call. Off by default because signing waits for the user. |
+| `url`, `WebSocketImpl`, `transport` | — | For tests and non-standard environments. |
+
+### Error codes
+
+| `code` | Meaning |
+|---|---|
+| `NOT_INSTALLED` | E-IMZO is not installed or not running. |
+| `OUTDATED_VERSION` | E-IMZO is older than `minVersion` (`params.installed`, `params.min`). |
+| `API_KEY_REJECTED` | E-IMZO rejected the API key for this domain. |
+| `WRONG_PASSWORD` | Wrong key password. |
+| `CANCELLED` | The user closed the password window. Usually not worth showing. |
+| `KEY_NOT_FOUND` | E-IMZO does not know this `keyId`. |
+| `KEY_NOT_LOADED` | `sign()` was called before `loadKey()` — a bug in the calling code. |
+| `FILE_TOO_LARGE` | File is larger than `maxSize` (`params.size`, `params.max`). |
+| `BACKEND_NOT_CONFIGURED` | A required `backend` method is missing — a bug in the calling code. |
+| `BACKEND_ERROR` | Your backend returned an error (`httpStatus`, `params.detail`). |
+| `EIMZO_ERROR` | Any other E-IMZO error; see `reason` and `status`. |
+| `TIMEOUT`, `WEBSOCKET_UNSUPPORTED` | Rare. |
+
+## Backend contract
+
+The browser never calls e-imzo-server directly. `createFetchBackend` expects e-imzo-server's response
+format, so your backend can proxy these calls:
+
+| Client request | Your backend calls | Response |
+|---|---|---|
+| `GET challengeUrl` | `GET /frontend/challenge` (do not cache) | `{ "status": 1, "challenge": "..." }` |
+| `POST loginUrl`, body: PKCS#7 (`text/plain`) | `POST /backend/auth`, then finds the user by PINFL/TIN and opens a session | any JSON, returned from `login()` |
+| `POST timestampUrl`, body: PKCS#7 (`text/plain`) | `POST /frontend/timestamp/pkcs7` | `{ "status": 1, "pkcs7b64": "..." }` |
+
+A full guide with a Spring Boot example, status codes, and security checklist (in Russian):
+[docs/backend.md](docs/backend.md).
+
+## Compatibility
+
+- **Browsers:** any modern browser with WebSocket. The build targets ES2020.
+- **TypeScript:** declarations included for ESM and CJS.
+- **Frameworks:** framework-agnostic: plain functions and a class, no framework dependency. It can be used
+  from Angular, React, Vue, Svelte, or a plain page. With SSR frameworks (Next.js, Nuxt, Angular SSR), call
+  it only on the client: E-IMZO runs on the user's computer, not on your server.
+- **Node.js:** not the intended environment. It can talk to a local E-IMZO from a script if you pass a
+  `WebSocketImpl` that sends an `Origin` header (see `scripts/check-real-eimzo.mjs`).
+- **E-IMZO:** 4.86 or newer by default (`minVersion`). Tested with E-IMZO 6.3.5.
+
+## When not to use it
+
+- **To verify signatures.** Verification needs e-imzo-server on your backend; this is a client library.
+- **For mobile signing** (ID-CARD E-IMZO MOBILE, QR code / deep link). Not supported yet.
+- **If you need a ready-made UI** (key picker modal). `eimzo-ts` has no UI components.
+- **If you need another provider** (for example RS-IMZO).
+
+## Alternatives
+
+- The official `e-imzo.js` + `e-imzo-client.js` example: callback-based, uses globals.
+- Other npm packages for E-IMZO exist. Some are framework-specific (Vue or React wrappers, UI modals),
+  some are framework-agnostic clients, and some are server-side clients for e-imzo-server. Search npm for
+  [`e-imzo`](https://www.npmjs.com/search?q=e-imzo) and compare their APIs and maintenance with your needs.
+  This project has not audited or benchmarked them.
+
+## FAQ
+
+**Does it work over HTTPS?** Yes. On https pages it connects to `wss://127.0.0.1:64443`.
+
+**Do I need an API key?** For `localhost` and `127.0.0.1`, use `DEV_API_KEYS` (public keys from the official
+example). For another domain during development, enable "Developer mode" in the E-IMZO tray menu. For
+production, request an API key for each domain and subdomain.
+
+**Is the password sent to my site?** No. E-IMZO asks for it in its own window. Without "Remember for 6 hours"
+it is remembered for 1 minute per `keyId`.
+
+**How do I test my code without E-IMZO?** Pass your own `transport` — a function
+`(request) => Promise<response>`:
 
 ```ts
 const eimzo = createEimzo({
-  locale: 'uz-Latn',
-  messages: {
-    'uz-Latn': { WRONG_PASSWORD: () => 'Parol xato, qayta urinib ko‘ring.' }, // заменить один текст
-    tg: { NOT_INSTALLED: () => '...' },                                        // добавить язык
-  },
-});
-eimzo.setLocale('en');
-```
-
-Недостающие тексты берутся из русского. Без экземпляра: `formatEimzoError(error, 'en')`.
-
-## Пароль
-
-- Пароль вводится в окне E-IMZO; сайт его не видит.
-- Без флажка «Запомнить на 6 час.» E-IMZO помнит пароль 1 минуту, с флажком — 6 часов.
-  Запоминается для `keyId`, поэтому держите один экземпляр `Eimzo`.
-- После перезагрузки страницы `keyId` теряется — снова нужен `loadKey()`.
-- `unloadKey()` при выходе из аккаунта стирает запомненный пароль на этом компьютере.
-- Несколько вызовов `sign()` подряд (двойной клик) выполняются по очереди, а не открывают два окна.
-
-## Backend
-
-Браузер не обращается к e-imzo-server напрямую. `createFetchBackend` ждёт ответы в формате
-e-imzo-server, поэтому backend может проксировать запросы:
-
-| Запрос клиента | Backend | Ответ |
-|---|---|---|
-| `GET challengeUrl` | `GET /frontend/challenge`, без кеша | `{ "status": 1, "challenge": "..." }` |
-| `POST loginUrl`, тело — PKCS#7 | `POST /backend/auth`, поиск пользователя по ПИНФЛ/ИНН, сессия | любой JSON — вернётся из `login()` |
-| `POST timestampUrl`, тело — PKCS#7 | `POST /frontend/timestamp/pkcs7` | `{ "status": 1, "pkcs7b64": "..." }` |
-
-Подробно, с примером на Java (Spring Boot): [docs/backend.md](docs/backend.md).
-
-Другой формат — свой объект вместо `createFetchBackend`:
-
-```ts
-createEimzo({
-  backend: {
-    getChallenge: () => api.get('/challenge').then((r) => r.data.value),
-    login: (pkcs7) => api.post('/login', { pkcs7 }).then((r) => r.data),
-    timestamp: (pkcs7) => api.post('/timestamp', { pkcs7 }).then((r) => r.data.pkcs7),
+  transport: async (req) => {
+    if (req.name === 'version') return { success: true, major: '6', minor: '3' };
+    if (req.plugin === 'pfx' && req.name === 'list_all_certificates') return { success: true, certificates: [] };
+    return { success: false, reason: `not mocked: ${req.plugin}.${req.name}` };
   },
 });
 ```
 
-## Фреймворки
+The demo's mock ([`demo/mock-eimzo.js`](demo/mock-eimzo.js)) is a fuller example.
 
-**Angular**
+**Can I read what is inside a PKCS#7?** The demo has a viewer ([`demo/pkcs7-viewer.js`](demo/pkcs7-viewer.js))
+that shows the document, signer, and signing time. It does not verify the signature.
 
-```ts
-@Injectable({ providedIn: 'root' })
-export class EimzoService {
-  readonly client = createEimzo({ apiKeys: environment.eimzoApiKeys, backend: createFetchBackend({ /* ... */ }) });
-}
+**Is `signingTime` trustworthy?** No. It comes from the user's computer clock. Use a timestamp
+(`signDocument`) and verify it on the server.
 
-// компонент
-keys = signal<EimzoKey[]>([]);
-async ngOnInit() { this.keys.set(await this.eimzo.client.listKeys()); }
-async login(key: EimzoKey) { await this.eimzo.client.login(key); this.router.navigate(['/cabinet']); }
-```
+## Troubleshooting
 
-Для `HttpClient` с интерсепторами передайте свой `backend` через `firstValueFrom(this.http.get(...))`.
+| Symptom | Cause and fix |
+|---|---|
+| `NOT_INSTALLED` | E-IMZO is not running. Start it (tray icon) or install it from [e-imzo.uz](https://e-imzo.uz/main/downloads/). |
+| `API_KEY_REJECTED`, or E-IMZO functions fail on a new domain | No API key for this domain. Use Developer mode for testing; add the production key to `apiKeys`. |
+| `OUTDATED_VERSION` | Update E-IMZO, or lower `minVersion` if you know your users' versions. |
+| `WRONG_PASSWORD` with `reason` "Password is not ASCII" | The password was typed in another keyboard layout. |
+| `listKeys()` returns fewer keys than E-IMZO shows | Keys without TIN and PINFL are skipped, as in the official client. |
+| Password is asked on every signature | A new `Eimzo` instance or `loadKey()` per signature creates a new `keyId`. Keep one instance. |
+| `KEY_NOT_FOUND` with `autoReloadKey: false` | E-IMZO restarted or 24 hours passed. Call `loadKey()` again. |
+| `BACKEND_ERROR` | Check `httpStatus` and `params.detail`; for `/backend/auth` status codes see [docs/backend.md](docs/backend.md). |
 
-**React**
+## For AI coding assistants
 
-```tsx
-export const eimzo = createEimzo({ /* ... */ }); // модуль-синглтон
+- [`llms.txt`](https://abduazimkhuja.github.io/eimzo-ts/llms.txt) and
+  [`llms-full.txt`](https://abduazimkhuja.github.io/eimzo-ts/llms-full.txt) — documentation index and full text.
+- [Agent Skill](skills/eimzo-ts/SKILL.md) for tools that support the Agent Skills format.
+- See [AI_INTEGRATION.md](AI_INTEGRATION.md).
 
-function KeyPicker() {
-  const [keys, setKeys] = useState<EimzoKey[]>([]);
-  const [error, setError] = useState<string>();
-  useEffect(() => { eimzo.listKeys().then(setKeys, (e) => setError(eimzo.t(e))); }, []);
-  // ...
-}
-```
-
-**Vue**
-
-```ts
-export const eimzo = createEimzo({ /* ... */ });
-
-const keys = ref<EimzoKey[]>([]);
-onMounted(async () => { keys.value = await eimzo.listKeys(); });
-```
-
-## API-ключи
-
-- `localhost` и `127.0.0.1` — `DEV_API_KEYS` (публичные ключи из официального примера).
-- Другой домен или IP при разработке — «Режим разработчика» в меню E-IMZO в трее.
-- Production — API-KEY выдаёт НИЦ НТ, отдельно на каждый домен и поддомен.
-
-## Переход с e-imzo.js
-
-Соответствие функций `EIMZOClient` и этой библиотеки: [docs/migration.md](docs/migration.md).
-
-## Разработка
+## Development
 
 ```bash
 npm install
@@ -223,9 +276,9 @@ npm test               # vitest
 npm run typecheck
 npm run build          # dist/: ESM, CJS, IIFE + .d.ts
 npm run demo           # http://localhost:3000/demo/
-npm run check:eimzo    # проверка на установленном E-IMZO; --interactive N — с подписью ключом N
+npm run check:eimzo    # checks against a locally installed E-IMZO; --interactive N signs with key N
 ```
 
-## Лицензия
+## License
 
 [MIT](LICENSE)

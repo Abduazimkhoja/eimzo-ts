@@ -1,0 +1,36 @@
+# eimzo-ts
+
+> Unofficial, dependency-free TypeScript client that lets a web page use E-IMZO, the desktop application for electronic digital signatures in Uzbekistan: list the user's keys, create PKCS#7 (CMS) signatures, and log users in by digital signature. Runs in the browser; signature verification is done on the server by e-imzo-server.
+
+Key facts:
+
+- Install: `npm install eimzo-ts`. ESM, CJS and an IIFE build (global `EimzoClient`), TypeScript declarations included.
+- Entry point: `createEimzo(options)` returns a client with `listKeys`, `listDevices`, `loadKey`, `sign`, `signFile`, `login`, `signDocument`, `unloadKey`, `call`.
+- Connects to E-IMZO at `ws://127.0.0.1:64646` (http pages) or `wss://127.0.0.1:64443` (https pages).
+- Errors are `EimzoError` with a `code` such as `NOT_INSTALLED`, `API_KEY_REJECTED`, `WRONG_PASSWORD`, `CANCELLED`.
+- Create one client per app; call it only in browser code (not during SSR).
+- Not for: signature verification, mobile signing (ID-CARD E-IMZO MOBILE), UI components.
+
+## Docs
+
+- [Overview](https://abduazimkhuja.github.io/eimzo-ts/): what it is, install, quick start, compatibility
+- [Login with a digital signature](https://abduazimkhuja.github.io/eimzo-ts/login/): challenge flow, backend endpoints, /backend/auth statuses
+- [Signing documents and files](https://abduazimkhuja.github.io/eimzo-ts/sign/): attached vs detached PKCS#7, timestamps, server checks
+- [API reference](https://abduazimkhuja.github.io/eimzo-ts/api/): options, methods, createFetchBackend, error codes
+- [FAQ](https://abduazimkhuja.github.io/eimzo-ts/faq/): when to use and not to use, HTTPS, API keys, SSR, testing, alternatives
+- [Troubleshooting](https://abduazimkhuja.github.io/eimzo-ts/troubleshooting/): every error code with causes and fixes
+
+## Source
+
+- [README](https://github.com/abduazimkhuja/eimzo-ts/blob/main/README.md): full English documentation
+- [Agent Skill](https://github.com/abduazimkhuja/eimzo-ts/blob/main/skills/eimzo-ts/SKILL.md): step-by-step integration instructions for coding agents
+- [Examples](https://github.com/abduazimkhuja/eimzo-ts/blob/main/skills/eimzo-ts/references/examples.md): login, signing, files, Angular, React, Vue, tests
+- [Backend guide](https://github.com/abduazimkhuja/eimzo-ts/blob/main/skills/eimzo-ts/references/backend.md): what the server must implement and check
+
+## Optional
+
+- [Full documentation in one file](https://abduazimkhuja.github.io/eimzo-ts/llms-full.txt)
+- [Backend guide with Spring Boot example (Russian)](https://github.com/abduazimkhuja/eimzo-ts/blob/main/docs/backend.md)
+- [Migration from e-imzo.js (Russian)](https://github.com/abduazimkhuja/eimzo-ts/blob/main/docs/migration.md)
+- [Changelog](https://github.com/abduazimkhuja/eimzo-ts/blob/main/CHANGELOG.md)
+- [Live demo](https://abduazimkhuja.github.io/eimzo-ts/demo/): works without E-IMZO using mock keys

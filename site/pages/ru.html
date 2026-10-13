@@ -1,0 +1,54 @@
+<!-- {"title": "eimzo-ts — подключение E-IMZO на сайте (TypeScript)", "description": "Неофициальная TypeScript-библиотека для E-IMZO: список ключей ЭЦП, подпись PKCS#7, вход по ЭЦП. Без зависимостей, для Angular, React, Vue и обычных страниц.", "path": "ru/", "lang": "ru", "type": "SoftwareSourceCode"} -->
+    <h1>eimzo-ts: подключение E-IMZO на сайте</h1>
+    <p class="lead">TypeScript-библиотека для работы с <a href="https://e-imzo.uz">E-IMZO</a> из браузера: список ключей
+      ЭЦП, подпись PKCS#7, вход по ЭЦП.</p>
+    <p class="note">Неофициальная библиотека. Не связана с разработчиками E-IMZO.</p>
+
+    <h2>Что это</h2>
+    <p>Замена <code>e-imzo.js</code> и <code>e-imzo-client.js</code> из официального примера: те же вызовы E-IMZO, но на
+      Promise, с типами и кодами ошибок, без глобальных переменных и без зависимостей. Сообщения об ошибках на русском,
+      узбекском (латиница и кириллица), каракалпакском и английском.</p>
+
+    <h2>Установка</h2>
+    <pre><code>npm install eimzo-ts</code></pre>
+
+    <h2>Пример</h2>
+<pre><code>import { createEimzo, createFetchBackend, DEV_API_KEYS } from 'eimzo-ts';
+
+const eimzo = createEimzo({
+  apiKeys: { ...DEV_API_KEYS, 'my-site.uz': 'API-KEY для my-site.uz' },
+  backend: createFetchBackend({
+    challengeUrl: '/api/eimzo/challenge',
+    loginUrl: '/api/eimzo/login',
+    timestampUrl: '/api/eimzo/timestamp',
+  }),
+});
+
+const keys = await eimzo.listKeys();                // ключи пользователя
+const user = await eimzo.login(keys[0]);            // вход: пароль спросит окно E-IMZO
+const pkcs7 = await eimzo.signDocument('документ'); // подпись + метка времени</code></pre>
+
+    <h2>Как это работает</h2>
+    <ol>
+      <li>Страница подключается к E-IMZO на компьютере пользователя: <code>ws://127.0.0.1:64646</code> (http) или
+        <code>wss://127.0.0.1:64443</code> (https).</li>
+      <li>Пароль вводится в окне E-IMZO, сайт его не видит.</li>
+      <li>Подпись проверяет ваш backend через e-imzo-server. Библиотека подписи не проверяет.</li>
+    </ol>
+
+    <h2>Когда не подходит</h2>
+    <ul>
+      <li>Проверка подписи — только e-imzo-server на сервере.</li>
+      <li>Мобильная подпись (ID-CARD E-IMZO MOBILE) — пока не поддерживается.</li>
+      <li>Готовые UI-компоненты — их нет.</li>
+    </ul>
+
+    <h2>Документация</h2>
+    <ul>
+      <li><a href="https://github.com/abduazimkhuja/eimzo-ts/blob/main/README.ru.md">README на русском</a>: API, ошибки, пароль, фреймворки.</li>
+      <li><a href="https://github.com/abduazimkhuja/eimzo-ts/blob/main/docs/backend.md">Backend</a>: эндпоинты, пример на Spring Boot, статусы <code>/backend/auth</code>, безопасность.</li>
+      <li><a href="https://github.com/abduazimkhuja/eimzo-ts/blob/main/docs/migration.md">Переход с e-imzo.js</a>.</li>
+      <li><a href="../demo/">Демо</a> — работает и без E-IMZO.</li>
+      <li>Подробная документация на английском: <a href="../login/">вход</a>, <a href="../sign/">подпись</a>,
+        <a href="../api/">API</a>, <a href="../faq/">FAQ</a>, <a href="../troubleshooting/">ошибки</a>.</li>
+    </ul>

@@ -1,4 +1,4 @@
-# Демо на GitHub Pages: https://abduazimkhuja.github.io/eimzo-ts/
+# Документация и демо на GitHub Pages: https://abduazimkhuja.github.io/eimzo-ts/
 name: Pages
 
 on:
@@ -28,13 +28,7 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npm run build
-      - name: Assemble site
-        run: |
-          mkdir -p _site/dist
-          cp -r demo _site/demo
-          cp dist/index.global.js dist/index.global.js.map _site/dist/
-          echo '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=demo/"><a href="demo/">eimzo-ts demo</a>' > _site/index.html
+      - run: npm run site # _site/: документация, sitemap.xml, llms.txt, llms-full.txt, демо
       - uses: actions/upload-pages-artifact@v3
       - id: deployment
         uses: actions/deploy-pages@v4

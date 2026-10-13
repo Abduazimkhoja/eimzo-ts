@@ -1,0 +1,49 @@
+<!-- {"title": "E-IMZO errors and fixes — eimzo-ts troubleshooting", "description": "What NOT_INSTALLED, API_KEY_REJECTED, WRONG_PASSWORD, CANCELLED, KEY_NOT_FOUND and other E-IMZO errors mean and how to fix them, plus e-imzo-server /backend/auth status codes.", "path": "troubleshooting/", "lang": "en", "type": "TechArticle"} -->
+    <h1>Troubleshooting E-IMZO errors</h1>
+    <p class="lead">Check <code>error.code</code> first, then <code>error.reason</code> and <code>error.status</code>
+      (raw data from E-IMZO) or <code>error.httpStatus</code> (your backend).</p>
+
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Code</th><th>Cause</th><th>Fix</th></tr></thead>
+      <tbody>
+        <tr id="NOT_INSTALLED"><td><code>NOT_INSTALLED</code></td><td>E-IMZO is not running or not installed; the WebSocket to 127.0.0.1 closed.</td><td>Start E-IMZO or install it from <a href="https://e-imzo.uz/main/downloads/">e-imzo.uz</a>.</td></tr>
+        <tr id="API_KEY_REJECTED"><td><code>API_KEY_REJECTED</code></td><td>No valid API key for the page's domain.</td><td><code>DEV_API_KEYS</code> on localhost; Developer mode in the E-IMZO tray for test domains; an issued key for each production domain.</td></tr>
+        <tr id="OUTDATED_VERSION"><td><code>OUTDATED_VERSION</code></td><td>E-IMZO is older than <code>minVersion</code> (4.86 by default).</td><td>Update E-IMZO.</td></tr>
+        <tr id="WRONG_PASSWORD"><td><code>WRONG_PASSWORD</code></td><td>Wrong password. <code>reason</code> "Password is not ASCII" means a non-Latin keyboard layout.</td><td>Let the user retry. E-IMZO has already shown its own message.</td></tr>
+        <tr id="CANCELLED"><td><code>CANCELLED</code></td><td>The user pressed Cancel in the password window.</td><td>Reset the UI; do not show an error.</td></tr>
+        <tr id="KEY_NOT_FOUND"><td><code>KEY_NOT_FOUND</code></td><td>E-IMZO forgot the key: restart, 24 hours, or the key was unloaded.</td><td>With <code>autoReloadKey</code> (default) <code>sign()</code> retries once. Otherwise call <code>loadKey()</code>.</td></tr>
+        <tr id="KEY_NOT_LOADED"><td><code>KEY_NOT_LOADED</code></td><td><code>sign()</code> before <code>loadKey()</code>.</td><td>Fix the calling code.</td></tr>
+        <tr id="FILE_TOO_LARGE"><td><code>FILE_TOO_LARGE</code></td><td>File is larger than <code>maxSize</code> (10 MB by default).</td><td>Raise <code>maxSize</code> or reject the file.</td></tr>
+        <tr id="BACKEND_NOT_CONFIGURED"><td><code>BACKEND_NOT_CONFIGURED</code></td><td><code>login()</code> without <code>getChallenge</code>/<code>login</code>, or <code>signDocument()</code> without <code>timestamp</code>.</td><td>Configure <code>backend</code>.</td></tr>
+        <tr id="BACKEND_ERROR"><td><code>BACKEND_ERROR</code></td><td>Your backend returned non-2xx or <code>status</code> other than 1.</td><td>Check <code>httpStatus</code> and <code>params.detail</code>.</td></tr>
+        <tr id="TIMEOUT"><td><code>TIMEOUT</code></td><td><code>timeoutMs</code> is set and there was no answer in time.</td><td>Raise or remove <code>timeoutMs</code>.</td></tr>
+        <tr id="WEBSOCKET_UNSUPPORTED"><td><code>WEBSOCKET_UNSUPPORTED</code></td><td>No WebSocket, e.g. the code ran on the server during SSR.</td><td>Call it only in the browser.</td></tr>
+        <tr id="EIMZO_ERROR"><td><code>EIMZO_ERROR</code></td><td>Any other E-IMZO error.</td><td>Read <code>reason</code>.</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+    <h2>Other symptoms</h2>
+    <ul>
+      <li><strong>The password is asked on every signature.</strong> Several clients, or <code>loadKey()</code> before every
+        <code>sign()</code>. Keep one client and load the key once.</li>
+      <li><strong>Fewer keys than E-IMZO shows.</strong> Keys without TIN and PINFL are skipped by design.</li>
+      <li><strong>Works on localhost but not on the real domain.</strong> No API key for that domain.</li>
+    </ul>
+
+    <h2>e-imzo-server <code>/backend/auth</code> statuses</h2>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>status</th><th>Meaning</th></tr></thead>
+      <tbody>
+        <tr><td>1</td><td>OK</td></tr>
+        <tr><td>-1</td><td>Certificate status could not be checked (often the VPN to the certification center is down). Do not log in; retry later.</td></tr>
+        <tr><td>-5</td><td>Signing time outside the allowed window: check the computer clock.</td></tr>
+        <tr><td>-10</td><td>Invalid signature.</td></tr>
+        <tr><td>-11, -12</td><td>Certificate invalid (at signing time).</td></tr>
+        <tr><td>-20</td><td>Challenge not found or expired (120 seconds).</td></tr>
+        <tr><td>-24, -25</td><td>Certificate policy or CA not allowed.</td></tr>
+      </tbody>
+    </table>
+    </div>

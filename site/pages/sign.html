@@ -1,0 +1,56 @@
+<!-- {"title": "Sign documents and files with E-IMZO (PKCS#7) — eimzo-ts", "description": "Create attached or detached PKCS#7 signatures with E-IMZO from the browser, add a trusted timestamp, and verify them on the server with e-imzo-server.", "path": "sign/", "lang": "en", "type": "TechArticle"} -->
+    <h1>Signing documents and files with E-IMZO</h1>
+    <p class="lead">Create a PKCS#7 (CMS) signature in the browser, add a timestamp, verify it on the server.</p>
+
+    <h2>Load a key once</h2>
+<pre><code>const keys = await eimzo.listKeys();
+await eimzo.loadKey(keys.find((k) =&gt; !k.expired)!);</code></pre>
+    <p>The loaded key's <code>keyId</code> is kept in the client. Later signatures reuse it, so E-IMZO does not ask
+      for the password again while it remembers it (1 minute, or 6 hours if the user ticks "Remember").</p>
+
+    <h2>Attached or detached</h2>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th></th><th>Attached (default for <code>sign</code>)</th><th>Detached (default for <code>signFile</code>)</th></tr></thead>
+      <tbody>
+        <tr><td>The signed data is inside the PKCS#7</td><td>yes</td><td>no — send the data separately</td></tr>
+        <tr><td>Server check</td><td><code>/backend/pkcs7/verify/attached</code></td><td><code>/backend/pkcs7/verify/detached</code>, body <code>dataBase64|pkcs7</code></td></tr>
+        <tr><td>Good for</td><td>short texts, JSON, forms</td><td>files you store anyway</td></tr>
+      </tbody>
+    </table>
+    </div>
+
+<pre><code>const attached = await eimzo.sign('text or JSON');
+const detached = await eimzo.sign(new Uint8Array(bytes), { detached: true });
+const filePkcs7 = await eimzo.signFile(input.files[0]);             // detached, 10 MB limit
+const bigFile = await eimzo.signFile(file, { maxSize: 50 * 1024 * 1024 });</code></pre>
+    <p>Strings are signed as UTF-8. If your string is already base64, pass <code>{ base64: true }</code>.</p>
+
+    <h2>Add a timestamp</h2>
+    <p>The <code>signingTime</code> inside a PKCS#7 comes from the user's computer clock and can be wrong or faked.
+      A timestamp from a trusted server fixes the time of signing.</p>
+<pre><code>const pkcs7 = await eimzo.signDocument(JSON.stringify({ id: orderId, nonce: crypto.randomUUID(), total }));
+await fetch(`/api/orders/${orderId}/sign`, { method: 'POST', headers: { 'Content-Type': 'text/plain' }, body: pkcs7 });</code></pre>
+    <p><code>signDocument</code> needs <code>backend.timestamp</code>: with <code>createFetchBackend</code>, set
+      <code>timestampUrl</code> to an endpoint that proxies <code>POST /frontend/timestamp/pkcs7</code> and returns
+      <code>{"status":1,"pkcs7b64":"..."}</code>.</p>
+
+    <h2>What the server must check</h2>
+    <ol>
+      <li>Every signer: <code>verified</code>, <code>certificateVerified</code>,
+        <code>certificateValidAtSigningTime</code> are true; <code>revokedStatusInfo</code> is empty.</li>
+      <li>The signed document is the one you expected (compare <code>documentBase64</code>).</li>
+      <li>The signer's PINFL/TIN matches the logged-in user.</li>
+      <li>A timestamp is present.</li>
+      <li>The unique ID inside the document was not used before (prevents replay).</li>
+    </ol>
+    <p>The PKCS#7 contains the signer's certificate with personal data (PINFL). Store and log it accordingly.</p>
+
+    <h2>Hardware devices</h2>
+<pre><code>const { idcard, baikey, ckc } = await eimzo.listDevices();
+if (idcard) {
+  await eimzo.loadKey('idcard');
+  const pkcs7 = await eimzo.sign('text');
+}</code></pre>
+
+    <p>See also: <a href="../api/">API reference</a> · <a href="../demo/">demo with a PKCS#7 viewer</a></p>

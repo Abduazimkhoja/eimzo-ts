@@ -1,0 +1,47 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1d2433;
+  --muted: #5b6475;
+  --border: #d8dde6;
+  --code-bg: #f4f6f9;
+  --link: #1d5bd8;
+  --note-bg: #fff8db;
+  --note-fg: #5c4d00;
+  color-scheme: light dark;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #12151c;
+    --fg: #e3e7ef;
+    --muted: #a0a8b8;
+    --border: #2c3341;
+    --code-bg: #1b2029;
+    --link: #7aa7ff;
+    --note-bg: #2e2a14;
+    --note-fg: #f0dd8a;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.6 system-ui, -apple-system, "Segoe UI", sans-serif; }
+header, main, footer { max-width: 860px; margin: 0 auto; padding: 0 16px; }
+header { display: flex; flex-wrap: wrap; gap: .5rem 1.5rem; align-items: baseline; padding-top: 1rem; padding-bottom: .75rem; border-bottom: 1px solid var(--border); }
+.brand { font-weight: 700; font-size: 1.15rem; color: var(--fg); text-decoration: none; }
+nav { display: flex; flex-wrap: wrap; gap: .25rem 1rem; font-size: .95rem; }
+nav a[aria-current="page"] { font-weight: 600; color: var(--fg); }
+a { color: var(--link); }
+h1 { font-size: 1.9rem; line-height: 1.25; margin: 1.5rem 0 .5rem; }
+h2 { font-size: 1.35rem; margin: 2rem 0 .5rem; }
+h3 { font-size: 1.1rem; margin: 1.5rem 0 .4rem; }
+.lead { font-size: 1.1rem; color: var(--muted); }
+pre, code { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: .9em; }
+code { background: var(--code-bg); padding: .1em .3em; border-radius: 4px; }
+pre { background: var(--code-bg); padding: .9rem 1rem; border-radius: 8px; overflow-x: auto; line-height: 1.45; }
+pre code { background: none; padding: 0; }
+.table-wrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; font-size: .95rem; }
+th, td { text-align: left; vertical-align: top; padding: .45rem .6rem; border-bottom: 1px solid var(--border); }
+th { color: var(--muted); font-weight: 600; }
+.note { background: var(--note-bg); color: var(--note-fg); padding: .6rem .9rem; border-radius: 8px; }
+details { border-bottom: 1px solid var(--border); padding: .6rem 0; }
+summary { cursor: pointer; font-weight: 600; }
+footer { margin-top: 3rem; padding-top: 1rem; padding-bottom: 2rem; border-top: 1px solid var(--border); color: var(--muted); font-size: .9rem; }

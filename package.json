@@ -1,14 +1,14 @@
 {
   "name": "eimzo-ts",
   "version": "0.1.2",
-  "description": "Unofficial framework-agnostic TypeScript client for E-IMZO (Uzbekistan digital signature): key listing, PKCS#7 signing, login by EDS.",
+  "description": "Unofficial TypeScript client for E-IMZO, the Uzbekistan digital signature app: list keys, create PKCS#7 signatures, log in by digital signature. Browser, zero dependencies.",
   "license": "MIT",
   "author": "Abduazimkhoja",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/abduazimkhuja/eimzo-ts.git"
   },
-  "homepage": "https://github.com/abduazimkhuja/eimzo-ts#readme",
+  "homepage": "https://abduazimkhuja.github.io/eimzo-ts/",
   "bugs": {
     "url": "https://github.com/abduazimkhuja/eimzo-ts/issues"
   },
@@ -31,24 +31,25 @@
   },
   "files": [
     "dist",
-    "CHANGELOG.md"
+    "skills",
+    "CHANGELOG.md",
+    "AI_INTEGRATION.md"
   ],
   "sideEffects": false,
   "keywords": [
     "e-imzo",
     "eimzo",
-    "e-imzo.js",
     "eri",
     "ecp",
+    "eds",
     "digital-signature",
     "electronic-signature",
     "pkcs7",
     "cms",
     "uzbekistan",
     "typescript",
-    "angular",
-    "react",
-    "vue"
+    "browser",
+    "websocket"
   ],
   "scripts": {
     "build": "tsup",
@@ -56,7 +57,8 @@
     "typecheck": "tsc --noEmit",
     "demo": "npm run build && npx --yes serve -l 3000 .",
     "check:eimzo": "npm run build && node scripts/check-real-eimzo.mjs",
-    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+    "prepublishOnly": "npm run typecheck && npm test && npm run build",
+    "site": "npm run build && node scripts/build-site.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.20.5",

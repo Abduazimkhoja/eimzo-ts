@@ -1,0 +1,73 @@
+<!-- {"title": "eimzo-ts — TypeScript client for E-IMZO digital signatures", "description": "Typed, dependency-free browser client for E-IMZO (Uzbekistan electronic digital signature): list keys, create PKCS#7 signatures, log in with a digital signature.", "path": "", "lang": "en", "type": "SoftwareSourceCode"} -->
+    <h1>eimzo-ts: TypeScript client for E-IMZO</h1>
+    <p class="lead">Let a web page use <a href="https://e-imzo.uz">E-IMZO</a>, the desktop application for electronic
+      digital signatures in Uzbekistan (ЭЦП / ERI): list the user's keys, create PKCS#7 signatures, and log users in
+      with their digital signature.</p>
+    <p class="note">Unofficial library. Not affiliated with the developers of E-IMZO.</p>
+
+    <h2>What it is</h2>
+    <p><code>eimzo-ts</code> is a browser library with a typed, Promise-based API and zero runtime dependencies. It
+      replaces <code>e-imzo.js</code> and <code>e-imzo-client.js</code> from the official E-IMZO example: no global
+      variables and no changes to built-in prototypes. ESM, CommonJS and a <code>&lt;script&gt;</code> build
+      (global <code>EimzoClient</code>) are included, with TypeScript declarations.</p>
+
+    <h2>How it works</h2>
+    <ol>
+      <li>The page connects to E-IMZO on the user's computer over WebSocket: <code>ws://127.0.0.1:64646</code> for
+        http pages, <code>wss://127.0.0.1:64443</code> for https.</li>
+      <li>E-IMZO shows its own password window. The page never sees the password.</li>
+      <li>E-IMZO returns a PKCS#7 (CMS) signature as base64.</li>
+      <li>Your backend verifies the signature with e-imzo-server. This library does not verify signatures.</li>
+    </ol>
+
+    <h2>Install</h2>
+    <pre><code>npm install eimzo-ts</code></pre>
+
+    <h2>Quick start</h2>
+<pre><code>import { createEimzo, createFetchBackend, DEV_API_KEYS } from 'eimzo-ts';
+
+const eimzo = createEimzo({
+  apiKeys: { ...DEV_API_KEYS, 'my-site.uz': 'API key for my-site.uz' },
+  backend: createFetchBackend({
+    challengeUrl: '/api/eimzo/challenge',
+    loginUrl: '/api/eimzo/login',
+    timestampUrl: '/api/eimzo/timestamp',
+  }),
+});
+
+const keys = await eimzo.listKeys();                // the user's keys
+const user = await eimzo.login(keys[0]);            // E-IMZO asks for the password
+const pkcs7 = await eimzo.signDocument('document'); // signature + timestamp</code></pre>
+
+    <h2>Use cases</h2>
+    <ul>
+      <li><a href="login/">Log in with a digital signature</a>: challenge, signature, server-side verification.</li>
+      <li><a href="sign/">Sign documents and files</a>: attached or detached PKCS#7, with a timestamp.</li>
+      <li>Show the user's keys: owner name, TIN (INN), PINFL, organization, validity, expiry.</li>
+      <li>Migrate from <code>e-imzo.js</code> callbacks to <code>async</code>/<code>await</code>
+        (<a href="https://github.com/abduazimkhuja/eimzo-ts/blob/main/docs/migration.md">migration guide</a>, in Russian).</li>
+    </ul>
+
+    <h2>Features</h2>
+    <ul>
+      <li>PFX keys, ID card, BAIK token and CKC devices.</li>
+      <li>Typed errors with stable codes (<code>NOT_INSTALLED</code>, <code>WRONG_PASSWORD</code>, <code>CANCELLED</code>, …)
+        and messages in Russian, Uzbek (Latin and Cyrillic), Karakalpak and English.</li>
+      <li>Signing calls are queued: a double click does not open two password windows.</li>
+      <li>When E-IMZO forgets the loaded key, it is loaded again and the signature is retried.</li>
+      <li><code>createFetchBackend()</code> matches e-imzo-server's response format.</li>
+      <li>Checked against E-IMZO 6.3.5: cancel, wrong password, signing, unloading the key.</li>
+    </ul>
+
+    <h2>Compatibility</h2>
+    <p>Runs in modern browsers (ES2020). It is framework-agnostic, so it can be used from Angular, React, Vue,
+      Svelte or plain JavaScript. With server-side rendering (Next.js, Nuxt, Angular SSR) call it only on the client,
+      because E-IMZO runs on the user's computer. Requires E-IMZO 4.86 or newer by default.</p>
+
+    <h2>When not to use it</h2>
+    <ul>
+      <li>To verify signatures: use e-imzo-server on your backend.</li>
+      <li>For mobile signing (ID-CARD E-IMZO MOBILE): not supported yet.</li>
+      <li>If you need ready-made UI components: there are none.</li>
+    </ul>
+    <p>More in the <a href="faq/">FAQ</a>. Try the <a href="demo/">live demo</a>; it works without E-IMZO, using mock keys.</p>
