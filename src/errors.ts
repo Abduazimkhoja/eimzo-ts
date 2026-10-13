@@ -93,7 +93,8 @@ export function notInstalledError(wsCode?: number, cause?: unknown): EimzoError<
 
 // Коды `status` E-IMZO, проверенные на E-IMZO 6.3.5.
 const STATUS_KEY_NOT_FOUND = [-1010, -1014];
-const STATUS_CANCELLED: number[] = [];
+// -5000 «Ввод пароля отменен»: кнопка «Отмена» в окне пароля.
+const STATUS_CANCELLED = [-5000];
 
 /** Превращает неуспешный ответ E-IMZO (`status`, `reason`) в типизированную ошибку. */
 export function errorFromResponse(res: { status?: number; reason?: string }): EimzoError {

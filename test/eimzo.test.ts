@@ -109,6 +109,15 @@ describe('loadKey / sign', () => {
     await expect(eimzo.sign('x')).rejects.toMatchObject({ code: 'KEY_NOT_LOADED' });
     await expect(eimzo.sign('x', { keyId: 'K' })).rejects.toMatchObject({ code: 'WRONG_PASSWORD' });
   });
+
+  it('«Отмена» в окне пароля — CANCELLED (реальный ответ E-IMZO 6.3)', async () => {
+    const { transport } = fakeTransport({
+      version: VERSION_486,
+      'pkcs7.create_pkcs7': { success: false, status: -5000, reason: 'Ввод пароля отменен' },
+    });
+    const eimzo = createEimzo({ transport });
+    await expect(eimzo.sign('x', { keyId: 'K' })).rejects.toMatchObject({ code: 'CANCELLED', status: -5000 });
+  });
 });
 
 describe('listDevices', () => {
