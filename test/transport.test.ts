@@ -188,6 +188,21 @@ describe('createFetchBackend', () => {
     await expect(backend.timestamp!('P')).rejects.toMatchObject({ code: 'BACKEND_ERROR', params: { detail: 'tsa down' } });
   });
 
+  it.each([
+    ['challenge', { status: 1, challenge: '' }],
+    ['challenge', { challenge: 42 }],
+    ['timestamp', { status: 1, pkcs7b64: '' }],
+    ['timestamp', { status: 1 }],
+  ] as const)('%s: пустое или нестроковое поле — BACKEND_ERROR (%j)', async (kind, body) => {
+    const backend = createFetchBackend({ challengeUrl: '/c', timestampUrl: '/t', fetch: respond(body) });
+    const call = kind === 'challenge' ? backend.getChallenge!() : backend.timestamp!('P');
+    await expect(call).rejects.toMatchObject({ code: 'BACKEND_ERROR', httpStatus: 200 });
+  });
+
+  it('challenge без поля status принимается (совместимость с 0.1.x)', async () => {
+    await expect(createFetchBackend({ challengeUrl: '/c', fetch: respond({ challenge: 'c1' }) }).getChallenge!()).resolves.toBe('c1');
+  });
+
   it('сетевая ошибка — BACKEND_ERROR с исходной ошибкой в cause', async () => {
     const cause = new TypeError('Failed to fetch');
     const backend = createFetchBackend({ loginUrl: '/l', fetch: vi.fn().mockRejectedValue(cause) });

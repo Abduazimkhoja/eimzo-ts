@@ -95,8 +95,26 @@ const atLeast = (v: EimzoVersion, min: EimzoVersion) =>
 
 // Поля ответов E-IMZO, которые читает клиент. Значения не доверяем: проверяем перед использованием.
 interface VersionResponse { major?: string; minor?: string }
-interface PfxEntry { disk: string; path: string; name: string; alias: string }
-interface TokenEntry { cardUID: string; statusInfo: string; ownerName: string; info: string }
+
+const isRecord = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null;
+const isString = (value: unknown): value is string => typeof value === 'string';
+
+/** Массив `field` из ответа E-IMZO: нет поля — пустой список, не массив — `EIMZO_ERROR`. */
+function listField(res: EimzoResponse, field: string): unknown[] {
+  const value: unknown = res[field];
+  if (value === undefined || value === null) return [];
+  if (!Array.isArray(value)) throw new EimzoError('EIMZO_ERROR', { reason: `invalid "${field}" in response` });
+  return value;
+}
+
+interface InvokeOptions {
+  signal?: AbortSignal;
+  /**
+   * `false` — вызов может открыть окно пароля: отмена проверяется перед отправкой,
+   * но отправленный вызов не обрывается, чтобы очередь дождалась ответа E-IMZO.
+   */
+  interruptible?: boolean;
+}
 
 function parseVersion(value: string): EimzoVersion {
   const [major, minor] = value.split('.').map((part) => parseInt(part, 10));
@@ -168,7 +186,8 @@ export class Eimzo<TLogin = unknown> {
    * Отмена сразу отклоняет Promise вызывающего. Операция, ждущая в очереди, не запускается.
    * У запущенной вызов E-IMZO не обрывается (окно пароля уже может быть открыто),
    * следующие шаги пропускаются, а очередь ждёт ответа E-IMZO — второго окна не будет.
-   * Поэтому внутри очереди `signal` проверяется между шагами и передаётся только в backend.
+   * Поэтому внутри очереди вызовы E-IMZO идут с `interruptible: false`, а `signal`
+   * проверяется перед каждым шагом и передаётся в backend.
    */
   private exclusive<T>(work: () => Promise<T>, signal?: AbortSignal): Promise<T> {
     const start = () => {
@@ -237,18 +256,20 @@ export class Eimzo<TLogin = unknown> {
    * не вызывайте параллельно с ними.
    */
   call(plugin: string, name: string, args: unknown[] = [], options: EimzoCallOptions = {}): Promise<EimzoResponse> {
-    return this.guard(() => this.invoke(plugin, name, args, options.signal));
+    return this.guard(() => this.invoke(plugin, name, args, { signal: options.signal }));
   }
 
-  /** `R` — поля ответа, которые читает вызывающий код. */
+  /** `R` — поля ответа, которые читает вызывающий код; значения всё равно проверяются. */
   private async invoke<R = object>(
     plugin: string,
     name: string,
     args: unknown[] = [],
-    signal?: AbortSignal,
+    { signal, interruptible = true }: InvokeOptions = {},
   ): Promise<EimzoResponse & R> {
     await this.whenReady(signal);
-    const res = await this.transport({ plugin, name, arguments: args }, { signal });
+    // Отмена во время init: запрос ещё не отправлен — не отправляем.
+    throwIfAborted(signal);
+    const res = await this.transport({ plugin, name, arguments: args }, { signal: interruptible ? signal : undefined });
     if (!res.success) throw errorFromResponse(res);
     return res as EimzoResponse & R;
   }
@@ -272,10 +293,14 @@ export class Eimzo<TLogin = unknown> {
   }
 
   private async listPfx(signal?: AbortSignal): Promise<PfxKey[]> {
-    const res = await this.invoke<{ certificates?: PfxEntry[] }>('pfx', 'list_all_certificates', [], signal);
+    const res = await this.invoke('pfx', 'list_all_certificates', [], { signal });
     const now = new Date();
     const keys: PfxKey[] = [];
-    for (const el of res.certificates ?? []) {
+    for (const el of listField(res, 'certificates')) {
+      // Элемент без нужных полей загрузить всё равно нельзя — пропускаем.
+      if (!isRecord(el) || !isString(el.disk) || !isString(el.path) || !isString(el.name) || !isString(el.alias)) {
+        continue;
+      }
       const info = parseCertificateInfo(el.alias, now);
       if (info) keys.push({ ...info, type: 'pfx', disk: el.disk, path: el.path, name: el.name, alias: el.alias });
     }
@@ -283,18 +308,19 @@ export class Eimzo<TLogin = unknown> {
   }
 
   private async listTokens(signal?: AbortSignal): Promise<TokenKey[]> {
-    const res = await this.invoke<{ tokens?: TokenEntry[] }>('ftjc', 'list_all_keys', [''], signal);
+    const res = await this.invoke('ftjc', 'list_all_keys', [''], { signal });
     const now = new Date();
     const keys: TokenKey[] = [];
-    for (const el of res.tokens ?? []) {
+    for (const el of listField(res, 'tokens')) {
+      if (!isRecord(el) || !isString(el.cardUID) || !isString(el.info)) continue;
       const info = parseCertificateInfo(el.info, now);
       if (info) {
         keys.push({
           ...info,
           type: 'ftjc',
           cardUID: el.cardUID,
-          statusInfo: el.statusInfo,
-          ownerName: el.ownerName,
+          statusInfo: isString(el.statusInfo) ? el.statusInfo : '',
+          ownerName: isString(el.ownerName) ? el.ownerName : '',
           info: el.info,
         });
       }
@@ -310,7 +336,7 @@ export class Eimzo<TLogin = unknown> {
       const check = async (enabled: boolean, plugin: string, name: string, field: string) => {
         if (!enabled) return false;
         try {
-          const res = await this.invoke(plugin, name, [], signal);
+          const res = await this.invoke(plugin, name, [], { signal });
           return Array.isArray(res[field]) && res[field].length > 0;
         } catch (error) {
           // Ошибка плагина = носителя нет; ошибки связи пробрасываем.
@@ -341,15 +367,18 @@ export class Eimzo<TLogin = unknown> {
 
   private async doLoadKey(key: EimzoKey | DeviceType, options: LoadKeyOptions): Promise<string> {
     const { signal } = options;
-    await this.releaseCurrentKey();
+    // До выгрузки прежнего ключа: отменённый вызов не должен менять состояние.
     throwIfAborted(signal);
+    await this.releaseCurrentKey(signal);
+    throwIfAborted(signal);
+    const queued = { signal, interruptible: false };
     let keyId: unknown;
     if (typeof key === 'string') {
       keyId = key;
     } else if (key.type === 'pfx') {
-      keyId = (await this.invoke<{ keyId?: unknown }>('pfx', 'load_key', [key.disk, key.path, key.name, key.alias])).keyId;
+      keyId = (await this.invoke<{ keyId?: unknown }>('pfx', 'load_key', [key.disk, key.path, key.name, key.alias], queued)).keyId;
     } else {
-      keyId = (await this.invoke<{ keyId?: unknown }>('ftjc', 'load_key', [key.cardUID])).keyId;
+      keyId = (await this.invoke<{ keyId?: unknown }>('ftjc', 'load_key', [key.cardUID], queued)).keyId;
     }
     if (typeof keyId !== 'string' || !keyId) {
       throw new EimzoError('EIMZO_ERROR', { reason: 'invalid keyId in response' });
@@ -358,9 +387,8 @@ export class Eimzo<TLogin = unknown> {
     this.currentKeyId = keyId;
     try {
       if (options.verifyPassword && typeof key !== 'string') {
-        throwIfAborted(signal);
-        if (key.type === 'pfx') await this.invoke('pfx', 'verify_password', [keyId]);
-        else await this.invoke('ftjc', 'verify_pin', [keyId, '1']);
+        if (key.type === 'pfx') await this.invoke('pfx', 'verify_password', [keyId], queued);
+        else await this.invoke('ftjc', 'verify_pin', [keyId, '1'], queued);
       }
       // Вызывающий уже получил отказ: ключ, загруженный после отмены, выгружаем.
       throwIfAborted(signal);
@@ -381,12 +409,16 @@ export class Eimzo<TLogin = unknown> {
     return this.exclusive(() => this.releaseCurrentKey());
   }
 
-  private async releaseCurrentKey(): Promise<void> {
+  /**
+   * `signal` — отмена до отправки `unload_key` (например, пока идёт повторный init):
+   * тогда ключ остаётся загруженным и состояние не меняется.
+   */
+  private async releaseCurrentKey(signal?: AbortSignal): Promise<void> {
     const key = this.currentKey;
     const keyId = this.currentKeyId;
     if (keyId && key && typeof key !== 'string' && key.type === 'pfx') {
       try {
-        await this.invoke('pfx', 'unload_key', [keyId]);
+        await this.invoke('pfx', 'unload_key', [keyId], { signal, interruptible: false });
       } catch (error) {
         // Уже выгружен или E-IMZO перезапущен — цель достигнута.
         if (!isEimzoError(error, 'KEY_NOT_FOUND')) throw error;
@@ -419,8 +451,10 @@ export class Eimzo<TLogin = unknown> {
     if (!keyId) throw new EimzoError('KEY_NOT_LOADED');
     const data64 = toBase64(data, options.base64 === true);
     const create = async (id: string): Promise<string> => {
-      throwIfAborted(options.signal);
-      const res = await this.invoke<{ pkcs7_64?: unknown }>('pkcs7', 'create_pkcs7', [data64, id, options.detached ? 'yes' : 'no']);
+      const res = await this.invoke<{ pkcs7_64?: unknown }>('pkcs7', 'create_pkcs7', [data64, id, options.detached ? 'yes' : 'no'], {
+        signal: options.signal,
+        interruptible: false,
+      });
       if (typeof res.pkcs7_64 !== 'string' || !res.pkcs7_64) {
         throw new EimzoError('EIMZO_ERROR', { reason: 'invalid pkcs7_64 in response' });
       }
@@ -438,6 +472,8 @@ export class Eimzo<TLogin = unknown> {
         key !== null &&
         typeof key !== 'string';
       if (!canReload) throw error;
+      // Отменённая операция не меняет состояние: следующий sign() сам перезагрузит ключ.
+      throwIfAborted(options.signal);
       this.currentKeyId = null; // старый keyId уже недействителен, выгружать нечего
       return create(await this.doLoadKey(key, { signal: options.signal }));
     }
@@ -451,7 +487,8 @@ export class Eimzo<TLogin = unknown> {
     const { signal } = options;
     return this.exclusive(async () => {
       const backend = this.requireBackend('getChallenge', 'login');
-      const challenge = await backend.getChallenge!({ signal });
+      // backend может не поддерживать signal: не держим очередь до его ответа.
+      const challenge = await abortable(backend.getChallenge!({ signal }), signal);
       await this.doLoadKey(key, { signal });
       const pkcs7 = await this.doSign(challenge, { signal });
       throwIfAborted(signal);

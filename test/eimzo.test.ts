@@ -67,6 +67,27 @@ describe('listKeys', () => {
     expect(keys).toEqual([expect.objectContaining({ type: 'ftjc', cardUID: 'U1' })]);
   });
 
+  it('некорректные элементы списка пропускаются, а не роняют разбор', async () => {
+    const { transport } = fakeTransport({
+      version: { success: true, major: '3', minor: '40' },
+      'pfx.list_all_certificates': {
+        success: true,
+        certificates: [null, 42, { disk: 'C:' }, { disk: 'C:', path: 'DSKEYS', name: 'key1', alias: PFX_ALIAS }],
+      },
+      'ftjc.list_all_keys': { success: true, tokens: [null, { cardUID: 'U1' }, { cardUID: 'U2', info: PFX_ALIAS }] },
+    });
+    const keys = await createEimzo({ transport, minVersion: '3.37' }).listKeys();
+    expect(keys.map((k) => (k.type === 'pfx' ? k.name : k.cardUID))).toEqual(['key1', 'U2']);
+  });
+
+  it('список не массивом — EIMZO_ERROR', async () => {
+    const { transport } = fakeTransport({
+      version: VERSION_486,
+      'pfx.list_all_certificates': { success: true, certificates: 'oops' },
+    });
+    await expect(createEimzo({ transport }).listKeys()).rejects.toMatchObject({ code: 'EIMZO_ERROR' });
+  });
+
   it('пробрасывает ошибку, если ключей нет и был сбой', async () => {
     const { transport } = fakeTransport({
       version: VERSION_486,

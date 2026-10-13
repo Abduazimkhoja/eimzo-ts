@@ -21,16 +21,21 @@ const mask = (s) => (s ? s.replace(/\S/g, (c, i) => (i === 0 ? c : '*')) : '—'
 const fmt = (d) => (d ? d.toISOString().slice(0, 10) : '—');
 const describeError = (e) => `${e.code ?? e.name} | status=${e.status ?? '—'} | reason=${e.reason ?? '—'} | ${e.message}`;
 
-/** `expectCode` — ожидаемая ошибка: её появление считается успехом шага. */
+/**
+ * `expectCode` — ожидаемая ошибка: её появление считается успехом шага.
+ * Проваленный шаг выставляет ненулевой код завершения, остальные шаги всё равно выполняются.
+ */
 async function step(title, fn, expectCode) {
+  let ok;
   try {
     const result = await fn();
-    const ok = expectCode === undefined;
+    ok = expectCode === undefined;
     console.log(`${ok ? '✔' : '✘'} ${title}${result !== undefined ? ': ' + result : ''}`);
   } catch (e) {
-    const ok = expectCode !== undefined && e.code === expectCode;
+    ok = expectCode !== undefined && e.code === expectCode;
     console.log(`${ok ? '✔' : '✘'} ${title}: ${describeError(e)}`);
   }
+  if (!ok) process.exitCode = 1;
 }
 
 const version = await eimzo.init();

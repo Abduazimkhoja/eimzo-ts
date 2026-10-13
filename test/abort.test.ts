@@ -182,3 +182,132 @@ describe('Eimzo: signal', () => {
     expect(calls.some((c) => c.name === 'create_pkcs7')).toBe(false);
   });
 });
+
+describe('отмена: порядок событий', () => {
+  it('sign, отменённый во время init, не отправляет create_pkcs7', async () => {
+    let answer!: () => void;
+    const { transport, calls } = fakeTransport({
+      version: () => new Promise((resolve) => (answer = () => resolve(VERSION_486))),
+      'pkcs7.create_pkcs7': { success: true, pkcs7_64: 'P' },
+    });
+    const eimzo = createEimzo({ transport });
+    const controller = new AbortController();
+    const result = eimzo.sign('x', { keyId: 'K', signal: controller.signal });
+    await vi.waitFor(() => expect(answer).toBeTypeOf('function'));
+    controller.abort();
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+    answer();
+    await eimzo.init();
+    expect(calls.some((c) => c.name === 'create_pkcs7')).toBe(false);
+  });
+
+  it('loadKey, отменённый во время init, не вызывает load_key', async () => {
+    let answer!: () => void;
+    const { transport, calls } = fakeTransport({
+      version: () => new Promise((resolve) => (answer = () => resolve(VERSION_486))),
+      'pfx.load_key': { success: true, keyId: 'K1' },
+    });
+    const eimzo = createEimzo({ transport });
+    const controller = new AbortController();
+    const result = eimzo.loadKey(key, { signal: controller.signal });
+    await vi.waitFor(() => expect(answer).toBeTypeOf('function'));
+    controller.abort();
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+    answer();
+    await eimzo.init();
+    expect(calls.some((c) => c.name === 'load_key')).toBe(false);
+    expect(eimzo.keyId).toBeNull();
+  });
+
+  it('отмена во время create_pkcs7 с ответом KEY_NOT_FOUND не сбрасывает keyId', async () => {
+    const controller = new AbortController();
+    const { transport, calls } = fakeTransport({
+      version: VERSION_486,
+      'pfx.load_key': { success: true, keyId: 'K1' },
+      'pkcs7.create_pkcs7': () => {
+        controller.abort();
+        return { success: false, status: -1010, reason: 'Ключ по идентификатору не найден' };
+      },
+    });
+    const eimzo = createEimzo({ transport });
+    await eimzo.loadKey(key);
+    await expect(eimzo.sign('x', { signal: controller.signal })).rejects.toMatchObject({ name: 'AbortError' });
+    await eimzo.init(); // дать очереди завершиться
+    expect(eimzo.keyId).toBe('K1'); // следующий sign сам перезагрузит ключ
+    expect(calls.filter((c) => c.name === 'load_key')).toHaveLength(1);
+  });
+
+  it('loadKey, отменённый во время повторного init, не выгружает прежний ключ', async () => {
+    let versionCalls = 0;
+    let answer!: () => void;
+    const { transport, calls } = fakeTransport({
+      version: () => {
+        versionCalls++;
+        if (versionCalls === 2) return { success: false, reason: 'restart' };
+        if (versionCalls === 3) return new Promise((resolve) => (answer = () => resolve(VERSION_486)));
+        return VERSION_486;
+      },
+      'pfx.load_key': { success: true, keyId: 'K1' },
+      'pfx.unload_key': { success: true },
+      'pfx.list_all_certificates': { success: true, certificates: [] },
+    });
+    const eimzo = createEimzo({ transport });
+    await eimzo.loadKey(key);
+    // Ошибка init сбрасывает кеш: следующий вызов запустит init заново.
+    (eimzo as unknown as { ready: null }).ready = null;
+    await expect(eimzo.listKeys()).rejects.toMatchObject({ reason: 'restart' });
+    const controller = new AbortController();
+    const result = eimzo.loadKey(key, { signal: controller.signal });
+    await vi.waitFor(() => expect(answer).toBeTypeOf('function'));
+    controller.abort();
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+    answer();
+    await eimzo.init();
+    await new Promise((r) => setTimeout(r, 0));
+    expect(calls.some((c) => c.name === 'unload_key')).toBe(false);
+    expect(eimzo.keyId).toBe('K1');
+  });
+
+  it('getChallenge без поддержки signal не держит очередь после отмены login', async () => {
+    const { transport } = fakeTransport({ version: VERSION_486, 'pkcs7.create_pkcs7': { success: true, pkcs7_64: 'P' } });
+    const backend = { getChallenge: vi.fn(() => new Promise<string>(() => {})), login: vi.fn() };
+    const eimzo = createEimzo({ transport, backend });
+    await eimzo.loadKey('ckc');
+    const controller = new AbortController();
+    const login = eimzo.login(key, { signal: controller.signal });
+    const sign = eimzo.sign('x');
+    await vi.waitFor(() => expect(backend.getChallenge).toHaveBeenCalled());
+    controller.abort();
+    await expect(login).rejects.toMatchObject({ name: 'AbortError' });
+    await expect(sign).resolves.toBe('P');
+  });
+
+  it('login, отменённый во время getChallenge без поддержки signal, не трогает прежний ключ', async () => {
+    let giveChallenge!: (challenge: string) => void;
+    let loads = 0;
+    const { transport, calls } = fakeTransport({
+      version: VERSION_486,
+      'pfx.load_key': () => ({ success: true, keyId: `K${++loads}` }),
+      'pfx.unload_key': { success: true },
+      'pkcs7.create_pkcs7': { success: true, pkcs7_64: 'P' },
+    });
+    const backend = {
+      getChallenge: () => new Promise<string>((resolve) => (giveChallenge = resolve)),
+      login: vi.fn(),
+    };
+    const eimzo = createEimzo({ transport, backend });
+    await eimzo.loadKey(key);
+    const controller = new AbortController();
+    const result = eimzo.login(key, { signal: controller.signal });
+    await vi.waitFor(() => expect(giveChallenge).toBeTypeOf('function'));
+    controller.abort();
+    await expect(result).rejects.toMatchObject({ name: 'AbortError' });
+    giveChallenge('challenge');
+    // sign встаёт в очередь после login и подписывает прежним ключом.
+    await expect(eimzo.sign('x')).resolves.toBe('P');
+    expect(eimzo.keyId).toBe('K1');
+    expect(calls.filter((c) => c.name === 'load_key')).toHaveLength(1);
+    expect(calls.some((c) => c.name === 'unload_key')).toBe(false);
+    expect(backend.login).not.toHaveBeenCalled();
+  });
+});

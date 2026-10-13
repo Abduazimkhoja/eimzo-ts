@@ -63,7 +63,8 @@ an open E-IMZO password window is not closed.
 | `init` | all | merged into every `fetch` (headers, `credentials`) | |
 | `fetch` | all | custom fetch implementation | |
 
-Non-2xx, a network failure, or (challenge and timestamp only) `status !== 1` → `BACKEND_ERROR`
+Non-2xx, a network failure, or (challenge and timestamp only) a present `status !== 1` or an empty
+`challenge` / `pkcs7b64` → `BACKEND_ERROR`
 (`httpStatus`, `params.detail` from `message`, original error in `cause`).
 
 ## EimzoError

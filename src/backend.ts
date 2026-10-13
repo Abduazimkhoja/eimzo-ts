@@ -42,10 +42,13 @@ export function createFetchBackend<TLogin = unknown>(options: FetchBackendOption
   const base = options.init ?? {};
 
   /**
-   * `serverFormat`: ответ в формате e-imzo-server, `status` должен быть `1`.
-   * Ответ `login` принадлежит приложению, его поле `status` не проверяется.
+   * Без `serverField` — ответ приложения (`login`): JSON возвращается как есть, `204` — `null`.
+   * С `serverField` — формат e-imzo-server: `status`, если есть, равен `1`, а поле
+   * `serverField` — непустая строка; она и возвращается.
    */
-  const request = async (url: string, init: RequestInit, serverFormat: boolean): Promise<unknown> => {
+  async function request(url: string, init: RequestInit): Promise<unknown>;
+  async function request(url: string, init: RequestInit, serverField: 'challenge' | 'pkcs7b64'): Promise<string>;
+  async function request(url: string, init: RequestInit, serverField?: 'challenge' | 'pkcs7b64'): Promise<unknown> {
     const headers = new Headers(base.headers);
     new Headers(init.headers).forEach((value, name) => headers.set(name, value));
     const signal = init.signal ?? base.signal ?? undefined;
@@ -60,56 +63,49 @@ export function createFetchBackend<TLogin = unknown>(options: FetchBackendOption
       const detail = cause instanceof Error ? cause.message : String(cause);
       throw new EimzoError('BACKEND_ERROR', { detail }, { cause });
     }
-    if (response.ok && response.status === 204) return null;
+    const httpStatus = response.status;
+    if (response.ok && httpStatus === 204 && !serverField) return null;
     let body: unknown;
     try {
       body = JSON.parse(text);
     } catch (cause) {
-      if (response.ok) {
-        throw new EimzoError('BACKEND_ERROR', { detail: 'invalid JSON response' }, { httpStatus: response.status, cause });
-      }
+      if (response.ok) throw new EimzoError('BACKEND_ERROR', { detail: 'invalid JSON response' }, { httpStatus, cause });
     }
-    const message =
-      body && typeof body === 'object' && 'message' in body && typeof body.message === 'string' && body.message
-        ? body.message
-        : undefined;
+    const record = typeof body === 'object' && body !== null ? (body as Record<string, unknown>) : undefined;
+    const message = typeof record?.message === 'string' && record.message ? record.message : undefined;
     if (!response.ok) {
-      throw new EimzoError('BACKEND_ERROR', { status: response.status, detail: message }, { httpStatus: response.status });
+      throw new EimzoError('BACKEND_ERROR', { status: httpStatus, detail: message }, { httpStatus });
     }
-    if (serverFormat && body && typeof body === 'object' && 'status' in body && body.status !== 1) {
-      const detail = message ?? `status ${String(body.status)}`;
-      throw new EimzoError('BACKEND_ERROR', { status: response.status, detail }, { httpStatus: response.status });
+    if (!serverField) return body;
+    if (record && 'status' in record && record.status !== 1) {
+      const detail = message ?? `status ${String(record.status)}`;
+      throw new EimzoError('BACKEND_ERROR', { status: httpStatus, detail }, { httpStatus });
     }
-    return body;
-  };
+    const value = record?.[serverField];
+    if (typeof value !== 'string' || !value) {
+      throw new EimzoError('BACKEND_ERROR', { detail: `no "${serverField}" field in response` }, { httpStatus });
+    }
+    return value;
+  }
 
-  const postPkcs7 = (url: string, pkcs7: string, serverFormat: boolean, signal?: AbortSignal) =>
-    request(url, { method: 'POST', body: pkcs7, headers: { 'Content-Type': 'text/plain' }, signal }, serverFormat);
+  const post = (pkcs7: string, signal: AbortSignal | undefined): RequestInit => ({
+    method: 'POST',
+    body: pkcs7,
+    headers: { 'Content-Type': 'text/plain' },
+    signal,
+  });
 
   const backend: EimzoBackend<TLogin> = {};
-  if (options.challengeUrl) {
-    const url = options.challengeUrl;
-    backend.getChallenge = async (callOptions) => {
-      const body = await request(url, { method: 'GET', cache: 'no-store', signal: callOptions?.signal }, true);
-      if (!body || typeof body !== 'object' || !('challenge' in body) || typeof body.challenge !== 'string') {
-        throw new EimzoError('BACKEND_ERROR', { detail: 'no "challenge" field in response' });
-      }
-      return body.challenge;
-    };
+  const { challengeUrl, loginUrl, timestampUrl } = options;
+  if (challengeUrl) {
+    backend.getChallenge = (callOptions) =>
+      request(challengeUrl, { method: 'GET', cache: 'no-store', signal: callOptions?.signal }, 'challenge');
   }
-  if (options.loginUrl) {
-    const url = options.loginUrl;
-    backend.login = async (pkcs7, callOptions) => (await postPkcs7(url, pkcs7, false, callOptions?.signal)) as TLogin;
+  if (loginUrl) {
+    backend.login = async (pkcs7, callOptions) => (await request(loginUrl, post(pkcs7, callOptions?.signal))) as TLogin;
   }
-  if (options.timestampUrl) {
-    const url = options.timestampUrl;
-    backend.timestamp = async (pkcs7, callOptions) => {
-      const body = await postPkcs7(url, pkcs7, true, callOptions?.signal);
-      if (!body || typeof body !== 'object' || !('pkcs7b64' in body) || typeof body.pkcs7b64 !== 'string') {
-        throw new EimzoError('BACKEND_ERROR', { detail: 'no "pkcs7b64" field in response' });
-      }
-      return body.pkcs7b64;
-    };
+  if (timestampUrl) {
+    backend.timestamp = (pkcs7, callOptions) => request(timestampUrl, post(pkcs7, callOptions?.signal), 'pkcs7b64');
   }
   return backend;
 }

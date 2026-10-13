@@ -46,20 +46,25 @@
   }
 
   function readNode(buf, pos) {
-    if (pos >= buf.length) throw new Error('Неожиданный конец данных');
+    // Каждый байт читается с проверкой границ: повреждённые данные дают ошибку, а не зависание.
+    function next() {
+      if (pos >= buf.length) throw new Error('Неожиданный конец данных');
+      return buf[pos++];
+    }
     var start = pos;
-    var b = buf[pos++];
+    var b = next();
     var node = { buf: buf, cls: b >> 6, constructed: (b & 0x20) !== 0, num: b & 0x1f, start: start, children: null };
     if (node.num === 0x1f) {
       node.num = 0;
-      do { b = buf[pos++]; node.num = node.num * 128 + (b & 0x7f); } while (b & 0x80);
+      do { b = next(); node.num = node.num * 128 + (b & 0x7f); } while (b & 0x80);
     }
-    var len = buf[pos++];
+    var len = next();
     var indefinite = len === 0x80;
     if (!indefinite && (len & 0x80)) {
       var n = len & 0x7f;
+      if (n > 6) throw new Error('Слишком большая длина элемента');
       len = 0;
-      for (var i = 0; i < n; i++) len = len * 256 + buf[pos++];
+      for (var i = 0; i < n; i++) len = len * 256 + next();
     }
     node.valueStart = pos;
 
@@ -67,6 +72,7 @@
       if (!node.constructed) throw new Error('Неопределённая длина у примитивного элемента');
       node.children = [];
       while (!(buf[pos] === 0 && buf[pos + 1] === 0)) {
+        if (pos + 1 >= buf.length) throw new Error('Нет маркера конца элемента неопределённой длины');
         var child = readNode(buf, pos);
         node.children.push(child);
         pos = child.end;
@@ -81,6 +87,7 @@
         node.children = [];
         for (var p = pos; p < node.valueEnd;) {
           var c = readNode(buf, p);
+          if (c.end > node.valueEnd) throw new Error('Вложенный элемент выходит за пределы родителя');
           node.children.push(c);
           p = c.end;
         }

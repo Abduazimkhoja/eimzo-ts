@@ -121,9 +121,10 @@ controller.abort(); // the pending call rejects with signal.reason (an AbortErro
 ```
 
 An aborted call rejects with `signal.reason`, not with `EimzoError`, so check `e.name === 'AbortError'`
-(or your own reason). A call that is still waiting in the signing queue never starts. A password window that
+(or your own reason). A call that is still waiting in the signing queue, or for `init()`, never reaches E-IMZO. A password window that
 E-IMZO has already opened stays open: E-IMZO has no way to close it, and the next queued operation waits
-for it to finish.
+for it to finish. Requests already sent are never interrupted: if `loadKey()` is aborted after it has
+unloaded the previous key, that key stays unloaded.
 
 ## Features
 
@@ -209,8 +210,8 @@ format, so your backend can proxy these calls:
 | `POST loginUrl`, body: PKCS#7 (`text/plain`) | `POST /backend/auth`, then finds the user by PINFL/TIN and opens a session | any JSON, returned from `login()` as is; `204 No Content` → `null` |
 | `POST timestampUrl`, body: PKCS#7 (`text/plain`) | `POST /frontend/timestamp/pkcs7` | `{ "status": 1, "pkcs7b64": "..." }` |
 
-`status` must be `1` only in the challenge and timestamp responses (e-imzo-server's format); the login response
-belongs to your app and is not inspected. An HTTP error, a non-JSON `200` response (for example, an SPA
+In the challenge and timestamp responses (e-imzo-server's format), `status`, when present, must be `1`, and
+`challenge` / `pkcs7b64` must be non-empty strings. The login response belongs to your app and is not inspected. An HTTP error, a non-JSON `200` response (for example, an SPA
 fallback page), or a network failure rejects with `BACKEND_ERROR`; the original error is in `cause`.
 
 A full guide with a Spring Boot example, status codes, and security checklist (in Russian):
