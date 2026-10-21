@@ -260,9 +260,11 @@ export class Eimzo<TLogin = unknown> {
    * Прямой вызов функции плагина E-IMZO (см. http://127.0.0.1:64646/apidoc.html).
    * Не встаёт в очередь `sign()`/`loadKey()`: функции, открывающие окно пароля,
    * не вызывайте параллельно с ними.
+   * Поля ответа — `unknown`; `call<{ field: string }>(...)` задаёт тип ожидаемых полей,
+   * но значения библиотека не проверяет — проверяйте их сами.
    */
-  call(plugin: string, name: string, args: unknown[] = [], options: EimzoCallOptions = {}): Promise<EimzoResponse> {
-    return this.guard(() => this.invoke(plugin, name, args, { signal: options.signal }));
+  call<R extends object = object>(plugin: string, name: string, args: unknown[] = [], options: EimzoCallOptions = {}): Promise<EimzoResponse & R> {
+    return this.guard(() => this.invoke<R>(plugin, name, args, { signal: options.signal }));
   }
 
   /** `R` — поля ответа, которые читает вызывающий код; значения всё равно проверяются. */

@@ -55,6 +55,20 @@ describe('createWebSocketTransport', () => {
     await expect(transport({ name: 'version' })).rejects.toMatchObject({ code: 'NOT_INSTALLED', wsCode: 1006 });
   });
 
+  it('ошибка соединения без close — NOT_INSTALLED, сокет закрывается', async () => {
+    let socket!: FakeWS;
+    class FakeWS {
+      onerror: (() => void) | null = null;
+      constructor() { socket = this; }
+      close = vi.fn();
+    }
+    const transport = createWebSocketTransport({ WebSocketImpl: FakeWS as unknown as typeof WebSocket });
+    const result = transport({ name: 'version' });
+    socket.onerror?.();
+    await expect(result).rejects.toMatchObject({ code: 'NOT_INSTALLED' });
+    expect(socket.close).toHaveBeenCalledOnce();
+  });
+
   it('таймаут', async () => {
     const { WS } = fakeWebSocket({ silent: true });
     const transport = createWebSocketTransport({ WebSocketImpl: WS, timeoutMs: 10 });

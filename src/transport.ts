@@ -10,10 +10,9 @@ export interface EimzoRequest {
 export interface EimzoResponse {
   success: boolean;
   reason?: string;
-  // Ответы плагинов E-IMZO разнородны; `any` оставлен ради совместимости с кодом,
-  // который читает поля ответа `call()`. Внутри библиотеки поля типизируются явно.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  [key: string]: any;
+  // Ответы плагинов E-IMZO разнородны: поля читаются как `unknown` и проверяются
+  // на месте; для типизации ответа `call()` служит обобщение `call<R>()`.
+  [key: string]: unknown;
 }
 
 /**
@@ -109,6 +108,11 @@ export function createWebSocketTransport(options: WebSocketTransportOptions = {}
             reject(new EimzoError('EIMZO_ERROR', { reason: 'invalid JSON response' }, { cause: e }));
           }
         });
+        socket.close();
+      };
+      // Ошибка соединения: `close` обычно следует за ней, но не ждём его.
+      socket.onerror = () => {
+        settle(() => reject(notInstalledError()));
         socket.close();
       };
       // Закрытие до ответа — значит E-IMZO недоступен.
