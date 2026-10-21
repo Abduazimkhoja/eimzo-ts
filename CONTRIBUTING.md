@@ -49,7 +49,7 @@ E-IMZO on Windows, run `npm run check:eimzo` (read-only) or `npm run check:eimzo
   go through `exclusive` (one at a time). Methods that wait on E-IMZO or a backend accept `{ signal }`.
 - **E-IMZO response mappings** in `src/errors.ts` must come from real E-IMZO responses. Add a test with the exact
   response (`status` and `reason`) and the E-IMZO version you saw it on.
-- **New error code:** add it to `EimzoErrorParams`, to every locale in `src/locales/`, to the error tables in
+- **New error code:** add it to `EimzoErrorParams`, to every `src/locales/*.json` (a test checks the same keys and placeholders in all languages), to the error tables in
   both READMEs, and mention it in the changelog. Adding a code is a minor change.
 - **Personal data:** never put real key owners' names, PINFL, or TIN into tests, logs, issues, or commits.
 - **Style:** code comments and locale texts are in Russian; keep the existing style. ESLint must pass.

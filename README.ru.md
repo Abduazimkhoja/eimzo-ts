@@ -122,18 +122,45 @@ try {
 
 ### Языки
 
+Тексты — строки с подстановками `{param}`, поэтому язык — это обычный JSON-объект.
+
 ```ts
+import tg from './eimzo-tg.json';   // свой язык с теми же ключами, что в ru.json
+
 const eimzo = createEimzo({
   locale: 'uz-Latn',
   messages: {
-    'uz-Latn': { WRONG_PASSWORD: () => 'Parol xato, qayta urinib ko‘ring.' }, // заменить один текст
-    tg: { NOT_INSTALLED: () => '...' },                                        // добавить язык
+    'uz-Latn': { WRONG_PASSWORD: 'Parol xato, qayta urinib ko‘ring.' }, // заменить один текст
+    tg,                                                                 // добавить язык
   },
 });
 eimzo.setLocale('en');
 ```
 
 Недостающие тексты берутся из `messages.ru`, затем из встроенного русского. Без экземпляра: `formatEimzoError(error, 'en')`.
+
+Встроенные каталоги опубликованы как JSON: `eimzo-ts/locales/ru.json`, `en`, `uz-Latn`, `uz-Cyrl`, `kaa`. Возьмите
+любой как образец для своего языка или передайте в i18next / Transloco как ресурс (подстановки `{name}`; в i18next
+укажите `interpolation: { prefix: '{', suffix: '}' }`). У `BACKEND_ERROR` и `EIMZO_ERROR` есть дополнительные ключи
+(`*_DETAIL`, `*_STATUS`, `*_REASON`) для вариантов с параметрами. Текст `reason`, который возвращает сам E-IMZO, не переводится.
+
+Свой i18n без словаря библиотеки: код `error.code` стабилен, текст — нет.
+
+```ts
+catch (e) {
+  if (isEimzoError(e)) showError(i18next.t(`eimzo.${e.code}`, e.params));
+}
+```
+
+## Низкоуровневые вызовы
+
+`call(plugin, name, args)` вызывает любую функцию E-IMZO. Поля ответа имеют тип `unknown`: укажите тип
+читаемых полей через обобщение и проверяйте значения сами.
+
+```ts
+const res = await eimzo.call<{ certificates?: unknown }>('pfx', 'list_all_certificates');
+const list = Array.isArray(res.certificates) ? res.certificates : [];
+```
 
 ## Отмена
 

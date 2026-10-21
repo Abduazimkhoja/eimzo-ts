@@ -21,7 +21,7 @@ Without a bundler: `<script src="https://unpkg.com/eimzo-ts@0.2/dist/index.globa
 | `backend` | `EimzoBackend<TLogin>` | — | `{ getChallenge?(opts?): Promise<string>; login?(pkcs7, opts?): Promise<TLogin>; timestamp?(pkcs7, opts?): Promise<string> }`; `opts = { signal? }` |
 | `minVersion` | `string` | `'4.86'` | `'major.minor'` |
 | `locale` | `string` | `'ru'` | `'ru' \| 'uz-Latn' \| 'uz-Cyrl' \| 'kaa' \| 'en'` or custom with `messages` |
-| `messages` | `Record<locale, Partial<Record<code, (params) => string>>>` | — | Missing texts fall back to `messages.ru`, then built-in Russian. |
+| `messages` | `Record<locale, Partial<Record<key, string>>>` | — | Strings with `{param}` placeholders; JSON catalogs: `eimzo-ts/locales/<locale>.json`. Missing texts fall back to `messages.ru`, then built-in Russian. |
 | `autoReloadKey` | `boolean` | `true` | On `KEY_NOT_FOUND`, reload the same key and retry `sign` once. Not applied when `keyId` is passed explicitly. |
 | `timeoutMs` | `number` | none | Every call. Signing waits for the user, so keep it unset or large; prefer `signal: AbortSignal.timeout(ms)` per operation. |
 | `url` | `string` | `defaultEimzoUrl()` | `wss://127.0.0.1:64443/service/cryptapi` on https, `ws://127.0.0.1:64646/service/cryptapi` otherwise |
@@ -48,7 +48,8 @@ an open E-IMZO password window is not closed.
 - `login(key): Promise<TLogin>` — `backend.getChallenge()` → `loadKey(key)` → `sign(challenge)` → `backend.login(pkcs7)`.
 - `signDocument(data, signOptions): Promise<string>` — `sign` → `backend.timestamp(pkcs7)`. Needs a loaded key.
 - `unloadKey(): Promise<void>` — `pfx.unload_key`; already-unloaded is not an error. Call on logout.
-- `call(plugin, name, args?): Promise<EimzoResponse>` — raw E-IMZO call; `success: false` → `EimzoError`.
+- `call<R>(plugin, name, args?): Promise<EimzoResponse & R>` — raw E-IMZO call; `success: false` → `EimzoError`.
+  Response fields are `unknown`: type the ones you read via `R` and validate the values.
 - `keyId: string | null`, `locale`, `setLocale(locale)`, `t(error, locale?)`.
 
 `loadKey`, `unloadKey`, `sign`, `signFile`, `login`, `signDocument` run one at a time (queued).

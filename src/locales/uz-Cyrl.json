@@ -1,0 +1,18 @@
+{
+  "NOT_INSTALLED": "E-IMZO билан алоқа йўқ. E-IMZO дастури ўрнатилган ва ишга туширилганига ишонч ҳосил қилинг.",
+  "WEBSOCKET_UNSUPPORTED": "Браузер WebSocket технологиясини қўллаб-қувватламайди. Браузерни янгиланг.",
+  "TIMEOUT": "E-IMZO ўз вақтида жавоб бермади. Қайтадан уриниб кўринг.",
+  "OUTDATED_VERSION": "E-IMZO дастурининг эскирган версияси ўрнатилган ({installed}). {min} ёки ундан янги версияни ўрнатинг: https://e-imzo.uz/main/downloads/",
+  "API_KEY_REJECTED": "E-IMZO ушбу сайт учун API-калитни рад этди.",
+  "WRONG_PASSWORD": "Парол нотўғри.",
+  "CANCELLED": "Амал бекор қилинди.",
+  "KEY_NOT_FOUND": "Калит E-IMZO да топилмади. Калитни қайтадан танланг.",
+  "FILE_TOO_LARGE": "Файл жуда катта ({size}). Энг кўпи — {max}.",
+  "KEY_NOT_LOADED": "Калит танланмаган.",
+  "BACKEND_NOT_CONFIGURED": "Backend созланмаган: {methods} методлари йўқ.",
+  "BACKEND_ERROR": "Сервер хатоси.",
+  "BACKEND_ERROR_DETAIL": "Сервер хатоси: {detail}",
+  "BACKEND_ERROR_STATUS": "Сервер хатоси (HTTP {status}).",
+  "EIMZO_ERROR": "E-IMZO да номаълум хатолик.",
+  "EIMZO_ERROR_REASON": "E-IMZO хатоси: {reason}"
+}

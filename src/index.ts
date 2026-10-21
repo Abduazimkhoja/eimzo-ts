@@ -28,6 +28,7 @@ export {
   type EimzoErrorCode,
   type EimzoErrorDetails,
   type EimzoErrorParams,
+  type EimzoMessageKey,
   type EimzoMessages,
 } from './errors';
 export {
@@ -38,11 +39,7 @@ export {
   type EimzoLocale,
   type MessageOverrides,
 } from './i18n';
-export { en } from './locales/en';
-export { kaa } from './locales/kaa';
-export { ru } from './locales/ru';
-export { uzLatn } from './locales/uz-Latn';
-export { uzCyrl } from './locales/uz-Cyrl';
+export { en, kaa, ru, uzCyrl, uzLatn } from './locales';
 export {
   createCapiwsTransport,
   createDefaultTransport,

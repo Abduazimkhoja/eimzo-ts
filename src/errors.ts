@@ -1,4 +1,5 @@
-import { ru } from './locales/ru';
+import { ru } from './locales';
+import { renderMessage } from './messages';
 
 // eslint-disable-next-line @typescript-eslint/no-empty-object-type
 type NoParams = {};
@@ -35,10 +36,11 @@ export interface EimzoErrorParams {
 
 export type EimzoErrorCode = keyof EimzoErrorParams;
 
-/** Словарь сообщений: функция на каждый код ошибки. */
-export type EimzoMessages = {
-  [C in EimzoErrorCode]: (params: EimzoErrorParams[C]) => string;
-};
+/** Ключи текстов: коды ошибок и варианты кодов с необязательными параметрами. */
+export type EimzoMessageKey = EimzoErrorCode | 'BACKEND_ERROR_DETAIL' | 'BACKEND_ERROR_STATUS' | 'EIMZO_ERROR_REASON';
+
+/** Словарь сообщений: шаблон на каждый ключ, параметры подставляются как `{name}`. */
+export type EimzoMessages = Record<EimzoMessageKey, string>;
 
 export interface EimzoErrorDetails {
   /** Текст ошибки от E-IMZO (`data.reason`), не переводится. */
@@ -71,7 +73,7 @@ export class EimzoError<C extends EimzoErrorCode = EimzoErrorCode> extends Error
 
   constructor(code: C, ...[params, details = {}]: ParamsArg<C>) {
     const p = (params ?? {}) as EimzoErrorParams[C];
-    super(ru[code](p));
+    super(renderMessage(code, p, [ru]));
     this.name = 'EimzoError';
     this.code = code;
     this.params = p;

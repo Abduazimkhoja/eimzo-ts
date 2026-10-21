@@ -1,0 +1,18 @@
+{
+  "NOT_INSTALLED": "Нет соединения с E-IMZO. Убедитесь, что приложение E-IMZO установлено и запущено.",
+  "WEBSOCKET_UNSUPPORTED": "Браузер не поддерживает WebSocket. Обновите браузер.",
+  "TIMEOUT": "E-IMZO не ответил вовремя. Попробуйте ещё раз.",
+  "OUTDATED_VERSION": "Установлена устаревшая версия E-IMZO ({installed}). Установите версию {min} или новее: https://e-imzo.uz/main/downloads/",
+  "API_KEY_REJECTED": "E-IMZO отклонил API-ключ для этого сайта.",
+  "WRONG_PASSWORD": "Неверный пароль.",
+  "CANCELLED": "Операция отменена.",
+  "KEY_NOT_FOUND": "Ключ не найден в E-IMZO. Выберите ключ заново.",
+  "FILE_TOO_LARGE": "Файл слишком большой ({size}). Максимум — {max}.",
+  "KEY_NOT_LOADED": "Ключ не выбран.",
+  "BACKEND_NOT_CONFIGURED": "Backend не настроен: нет методов {methods}.",
+  "BACKEND_ERROR": "Ошибка сервера.",
+  "BACKEND_ERROR_DETAIL": "Ошибка сервера: {detail}",
+  "BACKEND_ERROR_STATUS": "Ошибка сервера (HTTP {status}).",
+  "EIMZO_ERROR": "Неизвестная ошибка E-IMZO.",
+  "EIMZO_ERROR_REASON": "Ошибка E-IMZO: {reason}"
+}

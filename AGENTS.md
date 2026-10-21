@@ -65,8 +65,8 @@ Detailed API and examples: `README.md`, `skills/eimzo-ts/` (Agent Skill), `docs/
 - Every public method goes through `guard` (localized messages); methods that can open a password window go
   through `exclusive` (one at a time). Methods that wait on E-IMZO or the backend accept `{ signal }`
   (`EimzoCallOptions`) and pass it down to `invoke`/`transport`/`backend`. Keep new methods consistent with that.
-- Read fields of E-IMZO responses through `invoke<{ field?: unknown }>(...)` and validate them; do not rely on
-  the `any` index signature of `EimzoResponse` (it stays only for compatibility of `call()`).
+- Read fields of E-IMZO responses through `invoke<{ field?: unknown }>(...)` and validate them. The index
+  signature of `EimzoResponse` is `unknown`; the public `call<R>()` lets callers type the fields they read.
 - E-IMZO response mappings in `src/errors.ts` are based on real responses from E-IMZO 6.3.5. Add a test with
   the exact real response when you add a mapping.
 - Do not print key owners' personal data (names, PINFL, TIN) from real E-IMZO in logs or commits; the check

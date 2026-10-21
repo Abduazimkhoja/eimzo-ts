@@ -2,6 +2,7 @@
 import { describe, expectTypeOf, it } from 'vitest';
 import {
   createEimzo,
+  type Eimzo,
   EimzoError,
   isEimzoError,
   type EimzoBackend,
@@ -57,6 +58,15 @@ describe('типы публичного API', () => {
     expectTypeOf(eimzo.call).toBeCallableWith('pfx', 'list_all_certificates', [], { signal });
   });
 
+  it('call(): поля ответа — unknown, типизируются обобщением', () => {
+    const eimzo = {} as Eimzo;
+    type Untyped = Awaited<ReturnType<typeof eimzo.call>>;
+    expectTypeOf<Untyped['anything']>().toBeUnknown();
+    expectTypeOf<Untyped['success']>().toBeBoolean();
+    const typed = () => eimzo.call<{ foo: string }>('pfx', 'x');
+    expectTypeOf(typed).returns.resolves.toHaveProperty('foo').toBeString();
+  });
+
   it('совместимость: старые реализации транспорта и backend без параметра options подходят', () => {
     const transport = async () => ({ success: true });
     expectTypeOf(transport).toMatchTypeOf<Transport>();
@@ -71,9 +81,9 @@ describe('типы публичного API', () => {
   });
 
   it('свои тексты: частичные для языка, полный словарь — все коды', () => {
-    expectTypeOf<{ en: { WRONG_PASSWORD: () => string } }>().toMatchTypeOf<MessageOverrides>();
-    // @ts-expect-error в полном словаре нужны все коды
-    const partial: EimzoMessages = { WRONG_PASSWORD: () => '' };
+    expectTypeOf<{ en: { WRONG_PASSWORD: string } }>().toMatchTypeOf<MessageOverrides>();
+    // @ts-expect-error в полном словаре нужны все ключи
+    const partial: EimzoMessages = { WRONG_PASSWORD: '' };
     void partial;
   });
 });

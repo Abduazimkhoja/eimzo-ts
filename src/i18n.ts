@@ -1,9 +1,6 @@
 import { EimzoError, type EimzoErrorCode, type EimzoMessages } from './errors';
-import { en } from './locales/en';
-import { kaa } from './locales/kaa';
-import { ru } from './locales/ru';
-import { uzLatn } from './locales/uz-Latn';
-import { uzCyrl } from './locales/uz-Cyrl';
+import { en, kaa, ru, uzCyrl, uzLatn } from './locales';
+import { renderMessage } from './messages';
 
 /** Встроенные языки. Можно передать и любой свой код языка вместе с `messages`. */
 export type BuiltinLocale = 'ru' | 'uz-Latn' | 'uz-Cyrl' | 'kaa' | 'en';
@@ -34,10 +31,6 @@ export function formatEimzoError(
   if (!(error instanceof EimzoError)) {
     return error instanceof Error ? error.message : String(error);
   }
-  const code = error.code as EimzoErrorCode;
-  const format = (overrides[locale]?.[code] ??
-    builtinMessages[locale as BuiltinLocale]?.[code] ??
-    overrides[DEFAULT_LOCALE]?.[code] ??
-    ru[code]) as (params: unknown) => string;
-  return format(error.params);
+  const builtin = builtinMessages[locale as BuiltinLocale];
+  return renderMessage(error.code as EimzoErrorCode, error.params as object, [overrides[locale], builtin, overrides[DEFAULT_LOCALE], ru]);
 }

@@ -108,6 +108,49 @@ try {
 }
 ```
 
+### Custom messages and i18next / Transloco
+
+Texts are plain strings with `{param}` placeholders, so a language is just a JSON object. Replace single
+texts or add a whole language with `messages`:
+
+```ts
+import tg from './eimzo-tg.json';                 // your own language, same keys as ru.json
+
+const eimzo = createEimzo({
+  locale: 'tg',
+  messages: { tg, en: { WRONG_PASSWORD: 'Check the password.' } },
+});
+```
+
+Missing texts fall back to `messages.ru`, then to built-in Russian. The built-in catalogs are published as JSON
+(`eimzo-ts/locales/ru.json`, `en`, `uz-Latn`, `uz-Cyrl`, `kaa`): copy one as a template, or feed it to
+i18next / Transloco as a resource. Or skip the dictionary and map `error.code` yourself — the code is stable,
+the text is not:
+
+```ts
+import ru from 'eimzo-ts/locales/ru.json';
+
+i18next.addResourceBundle('ru', 'eimzo', ru);     // "OUTDATED_VERSION": "... ({installed}) ... {min} ..."
+catch (e) {
+  if (isEimzoError(e)) showError(i18next.t(`eimzo:${e.code}`, e.params)); // i18next uses {{x}}, see note below
+}
+```
+
+Placeholders are `{name}`; i18next expects `{{name}}` by default, so set
+`interpolation: { prefix: '{', suffix: '}' }` for that namespace. `BACKEND_ERROR` and `EIMZO_ERROR` have extra keys
+(`*_DETAIL`, `*_STATUS`, `*_REASON`) for the variants with parameters; pick them from `error.params`. The `reason`
+text that E-IMZO itself returns is not translated.
+
+### Low-level calls
+
+`call(plugin, name, args)` runs any E-IMZO function. Response fields are `unknown`; pass a type for the
+fields you read and validate the values yourself:
+
+```ts
+const res = await eimzo.call<{ certificates?: unknown }>('pfx', 'list_all_certificates');
+const list = Array.isArray(res.certificates) ? res.certificates : [];
+```
+
 ### Cancel an operation
 
 Every method that waits for E-IMZO or your backend accepts an `AbortSignal`, like `fetch`. Use it when a
@@ -177,7 +220,7 @@ Other exports: `createFetchBackend`, `EimzoError`, `isEimzoError`, `formatEimzoE
 | `backend` | — | `createFetchBackend(...)` or your own `{ getChallenge, login, timestamp }`. |
 | `minVersion` | `'4.86'` | Older E-IMZO → `OUTDATED_VERSION`. |
 | `locale` | `'ru'` | `'ru'`, `'uz-Latn'`, `'uz-Cyrl'`, `'kaa'`, `'en'`, or your own code with `messages`. |
-| `messages` | — | Override texts: `{ en: { WRONG_PASSWORD: () => '...' } }`. Missing texts fall back to `messages.ru`, then to built-in Russian. |
+| `messages` | — | Override texts: `{ en: { WRONG_PASSWORD: '...' } }`; a new language is a full object (see `eimzo-ts/locales/ru.json`). Missing texts fall back to `messages.ru`, then to built-in Russian. |
 | `autoReloadKey` | `true` | Reload the key and retry when E-IMZO no longer knows the `keyId`. |
 | `timeoutMs` | none | Timeout of every E-IMZO call. Off by default because signing waits for the user. For a limit on one operation, pass `signal: AbortSignal.timeout(ms)`. |
 | `url`, `WebSocketImpl`, `transport` | — | For tests and non-standard environments. |

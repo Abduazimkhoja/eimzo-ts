@@ -5,6 +5,30 @@
 
 ## [Unreleased]
 
+### Исправлено
+
+- WebSocket-транспорт обрабатывает `socket.onerror`: ошибка соединения сразу отклоняет вызов с
+  `NOT_INSTALLED` и закрывает сокет, не дожидаясь `close`.
+
+### Изменено
+
+- **Типы:** индексная сигнатура `EimzoResponse` — `unknown` вместо `any`. Код, читающий поля ответа
+  `call()`, нужно типизировать: `call<{ field: string }>(...)` или проверять значение.
+- `call<R>()` принимает обобщение с типом читаемых полей ответа.
+
+- **Локализация (breaking):** тексты — строки с `{param}` вместо функций. `messages: { en: { WRONG_PASSWORD: '...' } }`;
+  функции в `messages` больше не принимаются, `EimzoMessages` — `Record<EimzoMessageKey, string>`. У `BACKEND_ERROR` и
+  `EIMZO_ERROR` варианты с параметрами вынесены в ключи `BACKEND_ERROR_DETAIL`, `BACKEND_ERROR_STATUS`, `EIMZO_ERROR_REASON`.
+
+### Добавлено
+
+- Каталоги сообщений как JSON: `eimzo-ts/locales/ru.json`, `en`, `uz-Latn`, `uz-Cyrl`, `kaa` — образец для своего языка
+  и ресурс для i18next / Transloco.
+
+### Документация
+
+- README: свои тексты и языки, i18next/Transloco, низкоуровневый `call()`.
+
 ## [0.2.0] — 2026-10-13
 
 ### Добавлено

@@ -1,0 +1,18 @@
+{
+  "NOT_INSTALLED": "E-IMZO menen baylanıs joq. E-IMZO baǵdarlaması ornatılǵanın hám iske túsirilgenin tekseriń.",
+  "WEBSOCKET_UNSUPPORTED": "Brauzer WebSocket texnologiyasın qollap-quwatlamaydı. Brauzerdi jańalań.",
+  "TIMEOUT": "E-IMZO óz waqtında juwap bermedi. Qaytadan urınıp kóriń.",
+  "OUTDATED_VERSION": "E-IMZO baǵdarlamasınıń eski versiyası ornatılǵan ({installed}). {min} yamasa onnan jańa versiyanı ornatıń: https://e-imzo.uz/main/downloads/",
+  "API_KEY_REJECTED": "E-IMZO usı sayt ushın API-giltti qabıl etpedi.",
+  "WRONG_PASSWORD": "Parol qáte.",
+  "CANCELLED": "Ámel biykar etildi.",
+  "KEY_NOT_FOUND": "Gilt E-IMZO-da tabılmadı. Giltti qaytadan tańlań.",
+  "FILE_TOO_LARGE": "Fayl júdá úlken ({size}). Eń kóbi — {max}.",
+  "KEY_NOT_LOADED": "Gilt tańlanbaǵan.",
+  "BACKEND_NOT_CONFIGURED": "Backend sazlanbaǵan: {methods} metodları joq.",
+  "BACKEND_ERROR": "Server qátesi.",
+  "BACKEND_ERROR_DETAIL": "Server qátesi: {detail}",
+  "BACKEND_ERROR_STATUS": "Server qátesi (HTTP {status}).",
+  "EIMZO_ERROR": "E-IMZO-da belgisiz qátelik.",
+  "EIMZO_ERROR_REASON": "E-IMZO qátesi: {reason}"
+}

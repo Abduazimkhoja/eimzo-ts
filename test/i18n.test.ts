@@ -38,18 +38,18 @@ describe('локализация', () => {
       transport,
       locale: 'kk',
       messages: {
-        ru: { WRONG_PASSWORD: () => 'Пароль не подошёл' },
-        kk: { WRONG_PASSWORD: () => 'Құпиясөз қате.' },
+        ru: { WRONG_PASSWORD: 'Пароль не подошёл' },
+        kk: { WRONG_PASSWORD: 'Құпиясөз қате.' },
       },
     });
     const error = await eimzo.sign('x', { keyId: 'K' }).catch((e) => e);
     expect(error.message).toBe('Құпиясөз қате.');
     expect(eimzo.t(error, 'ru')).toBe('Пароль не подошёл');
-    expect(eimzo.t(new EimzoError('KEY_NOT_LOADED'))).toBe(ru.KEY_NOT_LOADED({})); // нет в kk → русский
+    expect(eimzo.t(new EimzoError('KEY_NOT_LOADED'))).toBe(ru.KEY_NOT_LOADED); // нет в kk → русский
   });
 
   it('нет текста в своём языке — берётся переопределённый русский, а не встроенный', () => {
-    const messages = { ru: { KEY_NOT_LOADED: () => 'Сначала выберите ключ' }, kk: {} };
+    const messages = { ru: { KEY_NOT_LOADED: 'Сначала выберите ключ' }, kk: {} };
     expect(formatEimzoError(new EimzoError('KEY_NOT_LOADED'), 'kk', messages)).toBe('Сначала выберите ключ');
   });
 
@@ -60,12 +60,28 @@ describe('локализация', () => {
     expect(formatEimzoError(e, 'xx')).toBe('Ошибка сервера (HTTP 503).');
   });
 
-  it('во всех встроенных языках есть все сообщения, и они не пустые', () => {
-    const codes = Object.keys(ru);
+  it('подставляет параметры в свой шаблон, включая отформатированный размер', () => {
+    const messages = { xx: { FILE_TOO_LARGE: '{size} > {max}, {unknown}', BACKEND_ERROR_DETAIL: '[{detail}]' } };
+    expect(formatEimzoError(new EimzoError('FILE_TOO_LARGE', { size: 2048, max: 1024 }), 'xx', messages)).toBe(
+      '2.0 KB > 1.0 KB, {unknown}',
+    );
+    expect(formatEimzoError(new EimzoError('BACKEND_ERROR', { detail: 'boom' }), 'xx', messages)).toBe('[boom]');
+  });
+
+  it('варианты BACKEND_ERROR и EIMZO_ERROR выбираются по параметрам', () => {
+    expect(formatEimzoError(new EimzoError('BACKEND_ERROR', { status: 503, detail: 'x' }), 'en')).toBe('Server error: x');
+    expect(formatEimzoError(new EimzoError('BACKEND_ERROR', {}), 'en')).toBe('Server error.');
+    expect(formatEimzoError(new EimzoError('EIMZO_ERROR', { reason: 'r' }), 'en')).toBe('E-IMZO error: r');
+    expect(formatEimzoError(new EimzoError('EIMZO_ERROR', {}), 'en')).toBe('Unknown E-IMZO error.');
+  });
+
+  it('во всех встроенных языках есть все сообщения с теми же параметрами', () => {
+    const placeholders = (text: string) => [...text.matchAll(/\{(\w+)\}/g)].map((m) => m[1]).sort();
     for (const [locale, messages] of Object.entries(builtinMessages)) {
-      expect(Object.keys(messages).sort(), locale).toEqual([...codes].sort());
-      for (const fn of Object.values(messages)) {
-        expect((fn as (p: object) => string)({ installed: '1.0', min: '2.0', methods: 'm', size: 2, max: 1 }).length).toBeGreaterThan(0);
+      expect(Object.keys(messages).sort(), locale).toEqual(Object.keys(ru).sort());
+      for (const [key, text] of Object.entries(messages)) {
+        expect(text.length, `${locale}.${key}`).toBeGreaterThan(0);
+        expect(placeholders(text), `${locale}.${key}`).toEqual(placeholders(ru[key as keyof typeof ru]));
       }
     }
   });

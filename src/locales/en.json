@@ -1,0 +1,18 @@
+{
+  "NOT_INSTALLED": "Cannot connect to E-IMZO. Make sure the E-IMZO application is installed and running.",
+  "WEBSOCKET_UNSUPPORTED": "Your browser does not support WebSocket. Please update your browser.",
+  "TIMEOUT": "E-IMZO did not respond in time. Please try again.",
+  "OUTDATED_VERSION": "An outdated version of E-IMZO is installed ({installed}). Install version {min} or newer: https://e-imzo.uz/main/downloads/",
+  "API_KEY_REJECTED": "E-IMZO rejected the API key for this site.",
+  "WRONG_PASSWORD": "Wrong password.",
+  "CANCELLED": "Operation cancelled.",
+  "KEY_NOT_FOUND": "Key not found in E-IMZO. Please select the key again.",
+  "FILE_TOO_LARGE": "File is too large ({size}). Maximum is {max}.",
+  "KEY_NOT_LOADED": "No key selected.",
+  "BACKEND_NOT_CONFIGURED": "Backend is not configured: missing methods {methods}.",
+  "BACKEND_ERROR": "Server error.",
+  "BACKEND_ERROR_DETAIL": "Server error: {detail}",
+  "BACKEND_ERROR_STATUS": "Server error (HTTP {status}).",
+  "EIMZO_ERROR": "Unknown E-IMZO error.",
+  "EIMZO_ERROR_REASON": "E-IMZO error: {reason}"
+}
