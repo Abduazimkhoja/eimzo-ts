@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+## [0.3.0] — 2026-10-21
+
 ### Исправлено
 
 - WebSocket-транспорт обрабатывает `socket.onerror`: ошибка соединения сразу отклоняет вызов с
@@ -24,6 +26,12 @@
 
 - Каталоги сообщений как JSON: `eimzo-ts/locales/ru.json`, `en`, `uz-Latn`, `uz-Cyrl`, `kaa` — образец для своего языка
   и ресурс для i18next / Transloco.
+
+### Миграция с 0.2
+
+- Свои тексты: `WRONG_PASSWORD: () => 'text'` → `WRONG_PASSWORD: 'text'`; параметры — `{installed}`, `{min}`, `{size}`, `{max}`,
+  `{methods}`, `{detail}`, `{status}`, `{reason}`. Образец для своего языка — `eimzo-ts/locales/ru.json`.
+- Поля ответа `call()` теперь `unknown`: `call<{ field: string }>(...)` или проверка значения.
 
 ### Документация
 
@@ -113,7 +121,8 @@
 - Сборки ESM, CJS и IIFE (`EimzoClient`) с типами.
 - Демо с режимом без E-IMZO и просмотром содержимого PKCS#7.
 
-[Unreleased]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.1.2...v0.1.3
 [0.1.2]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.1.1...v0.1.2

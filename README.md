@@ -53,7 +53,7 @@ npm install eimzo-ts
 Without a bundler, use the IIFE build. It exposes a global `EimzoClient`:
 
 ```html
-<script src="https://unpkg.com/eimzo-ts@0.2/dist/index.global.js"></script>
+<script src="https://unpkg.com/eimzo-ts@0.3/dist/index.global.js"></script>
 <script>
   const eimzo = EimzoClient.createEimzo({ apiKeys: EimzoClient.DEV_API_KEYS });
 </script>

@@ -11,7 +11,7 @@ import {
 import type { EimzoKey, PfxKey, TokenKey, EimzoOptions, EimzoBackend, EimzoErrorCode, Transport } from 'eimzo-ts';
 ```
 
-Without a bundler: `<script src="https://unpkg.com/eimzo-ts@0.2/dist/index.global.js">` → global `EimzoClient`.
+Without a bundler: `<script src="https://unpkg.com/eimzo-ts@0.3/dist/index.global.js">` → global `EimzoClient`.
 
 ## createEimzo(options?): Eimzo
 

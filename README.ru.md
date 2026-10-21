@@ -28,7 +28,7 @@ npm install eimzo-ts
 Без сборщика:
 
 ```html
-<script src="https://unpkg.com/eimzo-ts@0.2/dist/index.global.js"></script>
+<script src="https://unpkg.com/eimzo-ts@0.3/dist/index.global.js"></script>
 <script>
   const eimzo = EimzoClient.createEimzo({ apiKeys: EimzoClient.DEV_API_KEYS });
 </script>
