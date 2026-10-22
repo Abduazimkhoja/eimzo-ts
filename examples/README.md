@@ -28,6 +28,7 @@ npm run dev
 
 - Один экземпляр `Eimzo` на приложение (`eimzo.ts`), иначе E-IMZO спрашивает пароль при каждой подписи.
 - К E-IMZO обращаются только из браузера: `useEffect`, `onMounted`, `onMount`, `afterNextRender`, `<ClientOnly>`.
+  Вызов метода на сервере (SSR) даёт ошибку `NOT_IN_BROWSER`; создавать экземпляр `createEimzo()` на уровне модуля можно.
 - Ветвление по `error.code`, текст — `eimzo.t(error)`; `CANCELLED` пользователю не показывается.
 - Просроченные ключи (`key.expired`) отключены в списке; при выходе вызывается `unloadKey()`.
 

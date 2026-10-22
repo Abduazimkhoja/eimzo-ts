@@ -6,6 +6,10 @@
 
 **English** · [Русский](README.ru.md)
 
+| [📖 Documentation](https://abduazimkhuja.github.io/eimzo-ts/) | [▶️ Live demo](https://abduazimkhuja.github.io/eimzo-ts/demo/) | [🧩 Framework examples](https://github.com/abduazimkhuja/eimzo-ts/tree/main/examples) | [📦 npm](https://www.npmjs.com/package/eimzo-ts) | [📝 Changelog](https://github.com/abduazimkhuja/eimzo-ts/blob/main/CHANGELOG.md) |
+| :---: | :---: | :---: | :---: | :---: |
+| API, guides, FAQ | works without E-IMZO (mock keys) | React, Next.js, Vue, Nuxt, Angular, SvelteKit | install and versions | what changed in each release |
+
 `eimzo-ts` lets a web page talk to [E-IMZO](https://e-imzo.uz), the desktop application used in
 Uzbekistan for electronic digital signatures (ЭЦП / ERI). With it you can list the user's signing keys,
 create PKCS#7 (CMS) signatures, and log users in with their digital signature.
@@ -15,11 +19,6 @@ Promise-based API: no global variables, no changes to `String.prototype` or `Dat
 zero runtime dependencies.
 
 > **Unofficial.** This project is not affiliated with the developers of E-IMZO.
-
-[Documentation](https://abduazimkhuja.github.io/eimzo-ts/) ·
-[Live demo](https://abduazimkhuja.github.io/eimzo-ts/demo/) (works without E-IMZO, using mock keys) · [Framework examples](examples/) ·
-[npm](https://www.npmjs.com/package/eimzo-ts) ·
-[Changelog](CHANGELOG.md)
 
 ## Use cases
 

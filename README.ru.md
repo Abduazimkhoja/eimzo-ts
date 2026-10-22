@@ -6,6 +6,10 @@
 
 [English](README.md) · **Русский**
 
+| [📖 Документация](https://abduazimkhuja.github.io/eimzo-ts/ru/) | [▶️ Демо](https://abduazimkhuja.github.io/eimzo-ts/demo/) | [🧩 Примеры для фреймворков](https://github.com/abduazimkhuja/eimzo-ts/tree/main/examples) | [📦 npm](https://www.npmjs.com/package/eimzo-ts) | [📝 Журнал изменений](https://github.com/abduazimkhuja/eimzo-ts/blob/main/CHANGELOG.md) |
+| :---: | :---: | :---: | :---: | :---: |
+| API, руководства, FAQ | работает без E-IMZO (вымышленные ключи) | React, Next.js, Vue, Nuxt, Angular, SvelteKit | установка и версии | что изменилось в релизах |
+
 TypeScript-клиент для [E-IMZO](https://e-imzo.uz): список ключей ЭЦП, подпись PKCS#7, вход по ЭЦП.
 Без зависимостей и без привязки к фреймворку: Angular, React, Vue, Svelte или обычная страница.
 
@@ -13,8 +17,6 @@ TypeScript-клиент для [E-IMZO](https://e-imzo.uz): список клю�
 на Promise, с типами, без глобальных переменных и без правок `String.prototype`/`Date.prototype`.
 
 > **Неофициальная библиотека.** Не связана с разработчиками E-IMZO.
-
-**[Документация](https://abduazimkhuja.github.io/eimzo-ts/ru/)** · **[Демо](https://abduazimkhuja.github.io/eimzo-ts/demo/)** работает и без E-IMZO, на вымышленных ключах.
 
 Только для ПК: подпись выполняет приложение E-IMZO на компьютере пользователя. Мобильный
 вход (ID-CARD E-IMZO MOBILE) пока не поддерживается.
