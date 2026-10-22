@@ -5,6 +5,14 @@
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-10-22
+
+### Документация
+
+- README (английский и русский): заметный блок ссылок вверху — документация, демо, примеры для фреймворков, npm,
+  журнал изменений. Ссылки на примеры и changelog абсолютные, чтобы работали на npmjs.com.
+- `examples/`: зависимость `eimzo-ts@^0.4.0`; пояснение про `NOT_IN_BROWSER` в `examples/README.md`.
+
 ## [0.4.0] — 2026-10-22
 
 ### Добавлено
@@ -133,7 +141,8 @@
 - Сборки ESM, CJS и IIFE (`EimzoClient`) с типами.
 - Демо с режимом без E-IMZO и просмотром содержимого PKCS#7.
 
-[Unreleased]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.4.0...HEAD
+[Unreleased]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.4.1...HEAD
+[0.4.1]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.4.0...v0.4.1
 [0.4.0]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.1.3...v0.2.0
