@@ -5,6 +5,8 @@
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-10-22
+
 ### Добавлено
 
 - Код ошибки `NOT_IN_BROWSER`: вызов метода на сервере (SSR) без `window` и без своего `WebSocketImpl` сразу
@@ -131,7 +133,8 @@
 - Сборки ESM, CJS и IIFE (`EimzoClient`) с типами.
 - Демо с режимом без E-IMZO и просмотром содержимого PKCS#7.
 
-[Unreleased]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.1.3...v0.2.0
 [0.1.3]: https://github.com/abduazimkhuja/eimzo-ts/compare/v0.1.2...v0.1.3
