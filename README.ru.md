@@ -28,7 +28,7 @@ npm install eimzo-ts
 Без сборщика:
 
 ```html
-<script src="https://unpkg.com/eimzo-ts@0.3/dist/index.global.js"></script>
+<script src="https://unpkg.com/eimzo-ts@0.4/dist/index.global.js"></script>
 <script>
   const eimzo = EimzoClient.createEimzo({ apiKeys: EimzoClient.DEV_API_KEYS });
 </script>
@@ -118,6 +118,7 @@ try {
 | `BACKEND_NOT_CONFIGURED` | Нет нужного метода в `backend` — ошибка в коде. |
 | `BACKEND_ERROR` | Backend ответил ошибкой; `httpStatus`, `params.detail`. |
 | `EIMZO_ERROR` | Прочие ошибки E-IMZO; исходный текст в `reason`, код в `status`. |
+| `NOT_IN_BROWSER` | Вызов на сервере (SSR): E-IMZO работает на компьютере пользователя. См. [SSR](#ssr). |
 | `TIMEOUT`, `WEBSOCKET_UNSUPPORTED` | Редкие случаи. |
 
 ### Языки
@@ -252,6 +253,36 @@ export const eimzo = createEimzo({ /* ... */ });
 const keys = ref<EimzoKey[]>([]);
 onMounted(async () => { keys.value = await eimzo.listKeys(); });
 ```
+
+### SSR
+
+Импорт пакета и `createEimzo()` на сервере безопасны: до вызова метода ни `window`, ни сеть не используются.
+Вызов метода на сервере отклоняется с `NOT_IN_BROWSER`: E-IMZO запущен на компьютере пользователя, а не на вашем
+сервере. Вызывайте библиотеку только из клиентского кода:
+
+```tsx
+// Next.js: клиентский компонент
+'use client';
+import { useEffect, useState } from 'react';
+import { eimzo } from './eimzo';          // createEimzo() на уровне модуля — нормально
+
+export function KeyList() {
+  const [keys, setKeys] = useState<EimzoKey[]>([]);
+  useEffect(() => { void eimzo.listKeys().then(setKeys); }, []);   // не во время рендера
+  /* ... */
+}
+```
+
+```ts
+// Nuxt: onMounted (или обернуть компонент в <ClientOnly>)
+onMounted(async () => { keys.value = await eimzo.listKeys(); });
+
+// Angular SSR
+if (isPlatformBrowser(inject(PLATFORM_ID))) keys = await eimzo.listKeys();
+```
+
+Не вызывайте методы в серверном коде: экземпляр на уровне модуля общий для всех запросов сервера. Скрипты на Node,
+которые работают с локальным E-IMZO, должны передавать `WebSocketImpl`.
 
 ## API-ключи
 

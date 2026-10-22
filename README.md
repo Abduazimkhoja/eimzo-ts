@@ -17,7 +17,7 @@ zero runtime dependencies.
 > **Unofficial.** This project is not affiliated with the developers of E-IMZO.
 
 [Documentation](https://abduazimkhuja.github.io/eimzo-ts/) ·
-[Live demo](https://abduazimkhuja.github.io/eimzo-ts/demo/) (works without E-IMZO, using mock keys) ·
+[Live demo](https://abduazimkhuja.github.io/eimzo-ts/demo/) (works without E-IMZO, using mock keys) · [Framework examples](examples/) ·
 [npm](https://www.npmjs.com/package/eimzo-ts) ·
 [Changelog](CHANGELOG.md)
 
@@ -53,7 +53,7 @@ npm install eimzo-ts
 Without a bundler, use the IIFE build. It exposes a global `EimzoClient`:
 
 ```html
-<script src="https://unpkg.com/eimzo-ts@0.3/dist/index.global.js"></script>
+<script src="https://unpkg.com/eimzo-ts@0.4/dist/index.global.js"></script>
 <script>
   const eimzo = EimzoClient.createEimzo({ apiKeys: EimzoClient.DEV_API_KEYS });
 </script>
@@ -240,6 +240,7 @@ Other exports: `createFetchBackend`, `EimzoError`, `isEimzoError`, `formatEimzoE
 | `BACKEND_NOT_CONFIGURED` | A required `backend` method is missing — a bug in the calling code. |
 | `BACKEND_ERROR` | Your backend returned an error (`httpStatus`, `params.detail`). |
 | `EIMZO_ERROR` | Any other E-IMZO error; see `reason` and `status`. |
+| `NOT_IN_BROWSER` | Called on the server (SSR): E-IMZO runs on the user's computer. See [SSR](#server-side-rendering-ssr). |
 | `TIMEOUT`, `WEBSOCKET_UNSUPPORTED` | Rare. |
 
 ## Backend contract
@@ -259,6 +260,37 @@ fallback page), or a network failure rejects with `BACKEND_ERROR`; the original 
 
 A full guide with a Spring Boot example, status codes, and security checklist (in Russian):
 [docs/backend.md](docs/backend.md).
+
+## Server-side rendering (SSR)
+
+Importing the package and calling `createEimzo()` on the server is safe: nothing touches `window` or the network
+until you call a method. Calling a method on the server rejects with `NOT_IN_BROWSER`, because E-IMZO runs on the
+user's computer, not on your server. Call the library from client-only code:
+
+```tsx
+// Next.js: a client component
+'use client';
+import { useEffect, useState } from 'react';
+import { eimzo } from './eimzo';          // createEimzo() at module level is fine
+
+export function KeyList() {
+  const [keys, setKeys] = useState<EimzoKey[]>([]);
+  useEffect(() => { void eimzo.listKeys().then(setKeys); }, []);   // never during render
+  /* ... */
+}
+```
+
+```ts
+// Nuxt: onMounted (or wrap the component in <ClientOnly>)
+onMounted(async () => { keys.value = await eimzo.listKeys(); });
+
+// Angular SSR
+if (isPlatformBrowser(inject(PLATFORM_ID))) keys = await eimzo.listKeys();
+```
+
+Do not call it in server code and keep the instance out of per-request state: on a server a module-level instance is
+shared by all requests. Node scripts that talk to a local E-IMZO must pass `WebSocketImpl`
+(see [Compatibility](#compatibility)).
 
 ## Compatibility
 

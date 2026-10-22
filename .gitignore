@@ -4,3 +4,9 @@ dist/
 .DS_Store
 _site/
 coverage/
+.next/
+.nuxt/
+.output/
+.svelte-kit/
+.angular/
+examples/*/package-lock.json

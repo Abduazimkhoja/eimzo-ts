@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>eimzo-ts — vanilla TS</title>
+    <style>
+      body { font: 16px system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; }
+      textarea { width: 100%; box-sizing: border-box; min-height: 5rem; }
+      .error { color: #b00020; }
+    </style>
+  </head>
+  <body>
+    <h1>eimzo-ts — vanilla TS</h1>
+    <p id="mode"></p>
+    <p id="status" role="status"></p>
+    <select id="keys" aria-label="Ключ"></select>
+    <button id="load" disabled>Загрузить ключ</button>
+    <hr />
+    <textarea id="data" aria-label="Текст для подписи">Тестовый документ</textarea>
+    <button id="sign" disabled>Подписать</button>
+    <button id="logout" disabled>Выйти (выгрузить ключ)</button>
+    <textarea id="pkcs7" aria-label="PKCS#7" readonly placeholder="PKCS#7 (base64)"></textarea>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

@@ -31,7 +31,8 @@ Rules that prevent common bugs:
 
 - Create **one** `Eimzo` instance per app (module singleton or a root-level service). A new instance or a new
   `loadKey()` per signature makes E-IMZO ask for the password every time.
-- Call it **only in the browser**. With SSR (Next.js, Nuxt, Angular SSR) call it from client-only code.
+- Call it **only in the browser**. With SSR (Next.js, Nuxt, Angular SSR) call it from client-only code; a call on the
+  server rejects with `NOT_IN_BROWSER` (a Node script must pass `WebSocketImpl`).
 - Branch on `error.code` (or `isEimzoError(e, 'CODE')`), never on `error.message`. Show `eimzo.t(error)`.
 - Treat `CANCELLED` as "the user changed their mind", not as an error to display.
 - `KEY_NOT_LOADED` and `BACKEND_NOT_CONFIGURED` mean the calling code is wrong: `sign()` before `loadKey()`,

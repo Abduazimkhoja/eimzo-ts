@@ -5,6 +5,16 @@
 
 ## [Unreleased]
 
+### Добавлено
+
+- Код ошибки `NOT_IN_BROWSER`: вызов метода на сервере (SSR) без `window` и без своего `WebSocketImpl` сразу
+  отклоняется с понятным текстом. Раньше в Node 22+ это давало вводящий в заблуждение `NOT_INSTALLED`,
+  в Node 18/20 — `WEBSOCKET_UNSUPPORTED`. Node-скриптам нужно передавать `WebSocketImpl` (как в `scripts/check-real-eimzo.mjs`).
+- README: раздел про SSR (Next.js, Nuxt, Angular SSR).
+- `examples/`: рабочие примеры для vanilla TS, React, Vue, Next.js, Nuxt, Angular и SvelteKit с общим
+  mock-транспортом (работают без E-IMZO), открываются в StackBlitz. `npm run examples:sync` копирует общий код
+  из `examples/_shared/` в каждый пример.
+
 ## [0.3.0] — 2026-10-21
 
 ### Исправлено
