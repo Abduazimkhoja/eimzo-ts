@@ -1,6 +1,7 @@
 {
   "NOT_INSTALLED": "E-IMZO menen baylanıs joq. E-IMZO baǵdarlaması ornatılǵanın hám iske túsirilgenin tekseriń.",
   "WEBSOCKET_UNSUPPORTED": "Brauzer WebSocket texnologiyasın qollap-quwatlamaydı. Brauzerdi jańalań.",
+  "NOT_IN_BROWSER": "E-IMZO tek brauzerde isleydi. Kitapxananı serverde (SSR) shaqırmań.",
   "TIMEOUT": "E-IMZO óz waqtında juwap bermedi. Qaytadan urınıp kóriń.",
   "OUTDATED_VERSION": "E-IMZO baǵdarlamasınıń eski versiyası ornatılǵan ({installed}). {min} yamasa onnan jańa versiyanı ornatıń: https://e-imzo.uz/main/downloads/",
   "API_KEY_REJECTED": "E-IMZO usı sayt ushın API-giltti qabıl etpedi.",

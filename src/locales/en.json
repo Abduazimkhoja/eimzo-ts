@@ -1,6 +1,7 @@
 {
   "NOT_INSTALLED": "Cannot connect to E-IMZO. Make sure the E-IMZO application is installed and running.",
   "WEBSOCKET_UNSUPPORTED": "Your browser does not support WebSocket. Please update your browser.",
+  "NOT_IN_BROWSER": "E-IMZO is only available in the browser. Do not call the library on the server (SSR).",
   "TIMEOUT": "E-IMZO did not respond in time. Please try again.",
   "OUTDATED_VERSION": "An outdated version of E-IMZO is installed ({installed}). Install version {min} or newer: https://e-imzo.uz/main/downloads/",
   "API_KEY_REJECTED": "E-IMZO rejected the API key for this site.",

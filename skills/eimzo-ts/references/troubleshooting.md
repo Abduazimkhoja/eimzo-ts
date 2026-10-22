@@ -5,7 +5,8 @@ Read `error.code` first, then `error.reason` / `error.status` (raw E-IMZO data) 
 | code | Typical cause | Fix |
 |---|---|---|
 | `NOT_INSTALLED` | E-IMZO is not running or not installed; the WebSocket to 127.0.0.1 closed. `wsCode` has the close code. | Ask the user to start E-IMZO or install it from https://e-imzo.uz/main/downloads/. |
-| `WEBSOCKET_UNSUPPORTED` | No `WebSocket` (very old browser, or code ran on the server during SSR). | Run on the client only; in Node pass `WebSocketImpl`. |
+| `NOT_IN_BROWSER` | A method was called on the server (SSR, no `window`). | Call it from client-only code (`useEffect`, `onMounted`, `isPlatformBrowser`); in a Node script pass `WebSocketImpl`. |
+| `WEBSOCKET_UNSUPPORTED` | No `WebSocket` in the browser (very old browser). | Update the browser. |
 | `TIMEOUT` | `timeoutMs` is set and E-IMZO (or the user) did not answer in time. | Raise or remove `timeoutMs`. |
 | `OUTDATED_VERSION` | Installed E-IMZO is older than `minVersion` (default 4.86). | Ask the user to update E-IMZO. |
 | `API_KEY_REJECTED` | No valid API key for the page's domain. | `DEV_API_KEYS` for localhost; "Developer mode" in the E-IMZO tray for test domains; an issued key per production domain/subdomain. |

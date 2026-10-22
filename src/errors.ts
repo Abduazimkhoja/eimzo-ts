@@ -10,6 +10,8 @@ export interface EimzoErrorParams {
   NOT_INSTALLED: NoParams;
   /** Браузер не поддерживает WebSocket. */
   WEBSOCKET_UNSUPPORTED: NoParams;
+  /** Вызов на сервере (SSR): E-IMZO работает на компьютере пользователя, а не на сервере. */
+  NOT_IN_BROWSER: NoParams;
   /** E-IMZO не ответил за `timeoutMs`. */
   TIMEOUT: NoParams;
   /** Установленная версия E-IMZO ниже `minVersion`. */

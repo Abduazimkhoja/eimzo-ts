@@ -18,7 +18,8 @@
         <tr id="BACKEND_NOT_CONFIGURED"><td><code>BACKEND_NOT_CONFIGURED</code></td><td><code>login()</code> without <code>getChallenge</code>/<code>login</code>, or <code>signDocument()</code> without <code>timestamp</code>.</td><td>Configure <code>backend</code>.</td></tr>
         <tr id="BACKEND_ERROR"><td><code>BACKEND_ERROR</code></td><td>Your backend returned non-2xx or a non-JSON body, the request failed, or a challenge/timestamp response had <code>status</code> other than 1 or no value.</td><td>Check <code>httpStatus</code> and <code>params.detail</code>.</td></tr>
         <tr id="TIMEOUT"><td><code>TIMEOUT</code></td><td><code>timeoutMs</code> is set and there was no answer in time.</td><td>Raise or remove <code>timeoutMs</code>.</td></tr>
-        <tr id="WEBSOCKET_UNSUPPORTED"><td><code>WEBSOCKET_UNSUPPORTED</code></td><td>No WebSocket, e.g. the code ran on the server during SSR.</td><td>Call it only in the browser.</td></tr>
+        <tr id="NOT_IN_BROWSER"><td><code>NOT_IN_BROWSER</code></td><td>A method was called on the server (SSR, no <code>window</code>).</td><td>Call it only from client-only code; in a Node script pass <code>WebSocketImpl</code>.</td></tr>
+        <tr id="WEBSOCKET_UNSUPPORTED"><td><code>WEBSOCKET_UNSUPPORTED</code></td><td>The browser has no WebSocket.</td><td>Update the browser.</td></tr>
         <tr id="EIMZO_ERROR"><td><code>EIMZO_ERROR</code></td><td>Any other E-IMZO error.</td><td>Read <code>reason</code>.</td></tr>
       </tbody>
     </table>

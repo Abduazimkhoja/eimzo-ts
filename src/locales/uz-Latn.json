@@ -1,6 +1,7 @@
 {
   "NOT_INSTALLED": "E-IMZO bilan aloqa yoʻq. E-IMZO dasturi oʻrnatilgan va ishga tushirilganiga ishonch hosil qiling.",
   "WEBSOCKET_UNSUPPORTED": "Brauzer WebSocket texnologiyasini qoʻllab-quvvatlamaydi. Brauzerni yangilang.",
+  "NOT_IN_BROWSER": "E-IMZO faqat brauzerda ishlaydi. Kutubxonani serverda (SSR) chaqirmang.",
   "TIMEOUT": "E-IMZO oʻz vaqtida javob bermadi. Qaytadan urinib koʻring.",
   "OUTDATED_VERSION": "E-IMZO dasturining eskirgan versiyasi oʻrnatilgan ({installed}). {min} yoki undan yangi versiyani oʻrnating: https://e-imzo.uz/main/downloads/",
   "API_KEY_REJECTED": "E-IMZO ushbu sayt uchun API-kalitni rad etdi.",

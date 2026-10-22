@@ -77,7 +77,7 @@ await eimzo.sign(data, { signal: AbortSignal.timeout(60_000) });</code></pre>
     <p>Every error is an <code>EimzoError</code>: <code>code</code>, <code>params</code>, localized <code>message</code>,
       E-IMZO's <code>reason</code> and <code>status</code>, WebSocket <code>wsCode</code>, backend <code>httpStatus</code>.
       Check with <code>isEimzoError(e, 'CODE')</code>.</p>
-    <p>Codes: <code>NOT_INSTALLED</code>, <code>WEBSOCKET_UNSUPPORTED</code>, <code>TIMEOUT</code>,
+    <p>Codes: <code>NOT_INSTALLED</code>, <code>WEBSOCKET_UNSUPPORTED</code>, <code>NOT_IN_BROWSER</code>, <code>TIMEOUT</code>,
       <code>OUTDATED_VERSION</code>, <code>API_KEY_REJECTED</code>, <code>WRONG_PASSWORD</code>, <code>CANCELLED</code>,
       <code>KEY_NOT_FOUND</code>, <code>FILE_TOO_LARGE</code>, <code>KEY_NOT_LOADED</code>,
       <code>BACKEND_NOT_CONFIGURED</code>, <code>BACKEND_ERROR</code>, <code>EIMZO_ERROR</code>.

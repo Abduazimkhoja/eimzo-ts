@@ -71,7 +71,7 @@ Non-2xx, a network failure, or (challenge and timestamp only) a present `status 
 ## EimzoError
 
 `code`, `params`, `message` (localized), `reason` (raw E-IMZO text), `status` (E-IMZO numeric status),
-`wsCode` (WebSocket close code), `httpStatus` (backend). Codes: `NOT_INSTALLED`, `WEBSOCKET_UNSUPPORTED`,
+`wsCode` (WebSocket close code), `httpStatus` (backend). Codes: `NOT_INSTALLED`, `WEBSOCKET_UNSUPPORTED`, `NOT_IN_BROWSER`,
 `TIMEOUT`, `OUTDATED_VERSION {installed, min}`, `API_KEY_REJECTED`, `WRONG_PASSWORD`, `CANCELLED`,
 `KEY_NOT_FOUND`, `FILE_TOO_LARGE {size, max}`, `KEY_NOT_LOADED`, `BACKEND_NOT_CONFIGURED {methods}`,
 `BACKEND_ERROR {status?, detail?}`, `EIMZO_ERROR {reason?}`.

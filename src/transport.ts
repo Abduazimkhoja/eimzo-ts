@@ -47,12 +47,22 @@ export function defaultEimzoUrl(): string {
   return (https ? 'wss://127.0.0.1:64443' : 'ws://127.0.0.1:64646') + '/service/cryptapi';
 }
 
+/** Страница или Web Worker. На сервере (SSR) E-IMZO недоступен: он работает на компьютере пользователя. */
+function isBrowserLike(): boolean {
+  return typeof window !== 'undefined' || typeof (globalThis as { WorkerGlobalScope?: unknown }).WorkerGlobalScope !== 'undefined';
+}
+
 /** Как `CAPIWS` в e-imzo.js: одно WebSocket-соединение на каждый вызов. */
 export function createWebSocketTransport(options: WebSocketTransportOptions = {}): Transport {
   return (request, { signal } = {}) =>
     new Promise<EimzoResponse>((resolve, reject) => {
       if (signal?.aborted) {
         reject(abortReason(signal));
+        return;
+      }
+      // Свой `WebSocketImpl` — явное согласие: Node-скрипты, тесты.
+      if (!options.WebSocketImpl && !isBrowserLike()) {
+        reject(new EimzoError('NOT_IN_BROWSER'));
         return;
       }
       const WS = options.WebSocketImpl ?? (globalThis as { WebSocket?: typeof WebSocket }).WebSocket;
