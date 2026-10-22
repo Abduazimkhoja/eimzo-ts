@@ -7,7 +7,7 @@
     "build": "tsc --noEmit && vite build"
   },
   "dependencies": {
-    "eimzo-ts": "^0.3.0",
+    "eimzo-ts": "^0.4.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },

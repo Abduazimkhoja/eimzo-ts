@@ -8,7 +8,7 @@
     "check": "svelte-kit sync && svelte-check"
   },
   "dependencies": {
-    "eimzo-ts": "^0.3.0"
+    "eimzo-ts": "^0.4.0"
   },
   "devDependencies": {
     "@sveltejs/adapter-auto": "^6.0.0",
